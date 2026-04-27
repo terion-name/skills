@@ -47,6 +47,12 @@ For further details see [docs page](docs/code-quality.md)
 
 The three code-quality skills interlink: `writing-good-code` and `refactoring-and-reviewing-code` both reference `abstraction-quality` for the extract-vs-duplicate question.
 
+### API architecture
+
+| Skill | Description |
+|---|---|
+| [`orpc-contract-first`](skills/orpc-contract-first/) | oRPC contract-first API design for TypeScript monorepos with contracts in a shared package |
+
 ## Adding skills manually
 
 The `SKILL.md` files are plain Markdown and work in any harness. Two patterns:
