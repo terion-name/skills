@@ -1,8 +1,10 @@
-# skills
+# Skills
 
-A personal collection of reusable skills for AI coding agents — Claude Code, Cursor, Copilot, Codex, and others that follow the [Agent Skills](https://skills.sh) format.
+My collection of crafted skills.
 
 ## Install
+
+Skills are published at https://skills.sh
 
 ```bash
 npx skills add terion-name/skills
@@ -18,6 +20,25 @@ npx skills add terion-name/skills/writing-good-code
 
 ### Code quality
 
+A skillset for guiding AI coding agents to write and maintain code that is **simple, readable, and correct** — biased against over-engineering, pattern cargo-culting, and the wrong abstractions that calcify over time. Based on professional literature and articles.
+
+#### Philosophy
+
+Modern, practical, non-religious. Avoids the dogmatic mid-2000s Clean Code style (3-line methods, polymorphism-over-conditionals-always, `IFoo`-per-`Foo`) that reads well in books and produces unmaintainable codebases.
+
+Core ideas:
+
+- **Complexity = obscurity + dependencies** (Ousterhout).
+- **Modules hide secrets, not steps** (Parnas).
+- **Simple is not-complected; easy is near-at-hand** (Hickey).
+- **Duplication is far cheaper than the wrong abstraction** (Metz).
+- **Cognitive load is the real budget**; agents must use mechanical proxies for the human "feel" they lack (Zakirullin).
+- **Beauty is a correctness heuristic** (DHH, Alexander).
+
+Influences: Ousterhout, Beck (*Tidy First?*), Parnas, Hickey, Fowler, Metz, North (CUPID), Carmack/Muratori on over-abstraction, Alexis King ("Parse, don't validate"), Carson Gross (Locality of Behavior), Gall, Conway, Hyrum, Chesterton, Spolsky (leaky abstractions), Thomson (Postel critique), the Go Proverbs, Rob Pike, DHH, the Grug Brained Developer.
+
+For further details see [docs page](docs/code-quality.md)
+
 | Skill | Description |
 |---|---|
 | [`writing-good-code`](skills/writing-good-code/) | Greenfield authoring — naming, module shape, depth, errors, language idioms |
@@ -28,13 +49,92 @@ The three code-quality skills interlink: `writing-good-code` and `refactoring-an
 
 ## Adding skills manually
 
-Copy any skill folder into your project's `.claude/skills/` or your user-level `~/.claude/skills/`:
+The `SKILL.md` files are plain Markdown and work in any harness. Two patterns:
+
+**A) Native skills format** — the harness loads the folder directly.
+
+**B) Paste into instructions** — strip the YAML frontmatter, paste the body into the harness's instruction file. Works everywhere.
+
+---
+
+### Claude Code
+
+Drop the skill folder into your project or user skills directory:
 
 ```bash
+# project-level
+cp -r skills/writing-good-code .claude/skills/
+
+# user-level (all projects)
 cp -r skills/writing-good-code ~/.claude/skills/
 ```
 
-For other harnesses (Cursor, Cline, aider): the `SKILL.md` bodies are plain Markdown — paste or symlink them into your `CLAUDE.md` / `AGENTS.md`.
+### Claude.ai
+
+Upload each skill folder via the Skills UI, or use `npx skills add terion-name/skills`.
+
+### OpenAI Codex CLI
+
+Add to `AGENTS.md` in the repo root (project-level) or `~/.codex/instructions.md` (user-level).
+
+### Gemini CLI
+
+Add skill bodies to `GEMINI.md` in the repo root, or to `~/.gemini/GEMINI.md` for user-level.
+
+### Cursor
+
+Create a rule file for each skill under `.cursor/rules/`:
+
+```bash
+# strip frontmatter and write to a .mdc rule file
+awk 'BEGIN{f=0} /^---/{f++; next} f>=2{print}' skills/writing-good-code/SKILL.md \
+  > .cursor/rules/writing-good-code.mdc
+```
+
+Or paste the body manually into `.cursorrules`.
+
+### Windsurf
+
+Append the skill body to `.windsurfrules` at the project root:
+
+```bash
+awk 'BEGIN{f=0} /^---/{f++; next} f>=2{print}' skills/writing-good-code/SKILL.md \
+  >> .windsurfrules
+```
+
+### Cline / Roo
+
+Paste the skill body into `.clinerules` at the project root, or add it via the Cline system prompt UI.
+
+### GitHub Copilot
+
+Append skill bodies to `.github/copilot-instructions.md`:
+
+```bash
+awk 'BEGIN{f=0} /^---/{f++; next} f>=2{print}' skills/writing-good-code/SKILL.md \
+  >> .github/copilot-instructions.md
+```
+
+
+
+### Aider
+
+Pass skill files with `--read` at startup:
+
+```bash
+aider --read skills/writing-good-code/SKILL.md
+```
+
+Or add to `.aider.conf.yml`:
+
+```yaml
+read:
+  - skills/writing-good-code/SKILL.md
+```
+
+### Continue (VS Code / JetBrains)
+
+Add skill files as context via `.continue/config.json` using the `file` context provider, or paste the body into a custom system prompt in the Continue settings.
 
 ## Structure
 
