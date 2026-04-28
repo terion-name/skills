@@ -131,28 +131,16 @@ When in doubt, follow the language's and framework's strongest conventions — n
 
 ## Comments: for why, not what
 
-Good comments answer questions the code cannot:
+Comments are part of the design, not decoration. Lean toward writing them, not skipping them — every authority on the subject (Ousterhout, McConnell, Hunt & Thomas, Boswell & Foucher) agrees they carry information code structurally cannot:
 
-- **Why this order?** "Release the lock before logging to avoid holding it across I/O."
-- **What invariant?** "Assumption: list is sorted ascending by timestamp."
-- **What contract?** "Caller owns the returned handle and must close it."
-- **What non-obvious fact?** "This runs at startup before the DI container is ready, so it uses the raw config."
+- **Why** this approach was chosen and others rejected.
+- **Contract** — preconditions, postconditions, invariants, ownership, thread-safety.
+- **Surprises** — anything a reader would not predict from the code alone.
+- **Big-picture orientation** — file/class headers explaining what this is and where it sits.
 
-Bad comments restate the code:
+Bad comments restate code (`i++; // increment i`). When that's all a comment would say, the *name* is wrong — rename until the comment is redundant, then delete it. Ousterhout's "write the comment first" is a design tool: if you cannot write a one-line contract for a function, its design is not ready.
 
-```ts
-// Bad
-// increment i by 1
-i++;
-
-// Bad
-// check if user is active
-if (user.isActive) { … }
-```
-
-If a comment would just restate the code, the *name* is wrong. Rename until the comment is redundant, then delete the comment.
-
-**Ousterhout's "write the comment first"** is a design tool: try to write a one-line contract for the function before implementing it. If you cannot, the design is not ready. The comment you would have written becomes the function's docstring.
+Full guide — including big-picture comments, file/module headers, ADRs for architecture decisions, language-specific docstring conventions, and what NOT to comment — in `comments.md`.
 
 ## Hidden information that must be surfaced
 

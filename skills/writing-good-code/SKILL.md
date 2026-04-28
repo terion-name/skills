@@ -88,15 +88,23 @@ Make illegal states unrepresentable. Use `NonEmptyList`, branded IDs, discrimina
 
 Code that changes together should sit together. A component's behavior should be visible in that component (Carson Gross's "Locality of Behavior"). Resist splitting a feature across `controllers/`, `services/`, `repositories/`, `mappers/`, `dtos/` when the codebase does not already demand it. Organize top-level folders by **domain** (`patients/`, `billing/`), not by **layer** (`models/`, `views/`, `services/`).
 
-### Rule 8 — Write the comment you cannot write in code
+### Rule 8 — Comment what code structurally cannot say
 
-Code expresses *what* and *how*. Comments are for *why*, *contract*, and *intent not expressible in types*:
+**Default toward writing comments, not skipping them.** "Self-documenting code" is a heuristic, not a rule — every serious treatment of the subject (Ousterhout, Hunt & Thomas, McConnell, Boswell & Foucher, Stroustrup, Raskin) agrees that comments carry information code cannot. Skipping them is a recurring agent failure mode that makes generated code clean in isolation and unmaintainable in aggregate.
 
-- Units, invariants, preconditions, postconditions.
-- Non-obvious rationale ("this order prevents a deadlock on X").
-- Cross-module contracts ("caller owns the returned handle").
+Comments are for what code can't say:
 
-Do not write comments that restate the code. If a comment would just restate, the name is wrong — rename until the comment becomes redundant. Ousterhout's "write the comment first" is a design tool: if you cannot write a one-line contract for a function, its design is not ready.
+- **Why this and not the alternative** — rationale, rejected approaches, non-obvious constraints.
+- **Contract** — preconditions, postconditions, invariants, ownership, side effects, thread-safety.
+- **Units, ranges, shape** the type system can't express.
+- **Why this code exists at all** — workarounds, regulatory requirements, ordering dependencies, references to upstream bugs.
+- **Surprising behavior** — anything an average reader would say "wait, what?" about.
+- **Big-picture orientation** — file headers, class-level summaries, section dividers in long functions. *This is the category most often missing from agent code.*
+- **TODOs with owner and date** — never undated.
+
+Do not write comments that restate the code, that compensate for bad names (rename instead), or that drift out of date silently. For architecture-spanning decisions, write an ADR (`docs/adr/`) and point to it from code. Match the codebase's documentation convention (JSDoc/TSDoc, PEP 257 docstrings, XML doc comments, godoc).
+
+Ousterhout's "write the comment first" is a design tool: if you cannot write a one-line contract for a function, its design is not ready. Full guide in `references/comments.md`.
 
 ## Language idioms
 

@@ -137,6 +137,15 @@ The same applies to the strong opinions about Clean Code, design patterns, and S
 - Conway, Melvin. "How Do Committees Invent?", 1968. Used for: system reflects org structure; inverse maneuver for module design.
 - Chesterton, G. K. *The Thing*, 1929 (the fence passage). Used for: do not remove what you cannot explain.
 
+### On comments
+- Ousterhout — "good comments can make a big difference," chapters 12-16 of A Philosophy of Software Design; "write the comment first" as a design tool; comments belong in code, not commit log; high-level comments are easier to maintain.
+- McConnell — Code Complete chapter 32, comments above the code, the "stale comments are worse than none" argument.
+- Boswell & Foucher, The Art of Readable Code — the "Huh?" test, big-picture comments, director's commentary, anticipating reader questions, what NOT to comment.
+- Hunt & Thomas, The Pragmatic Programmer — "comments should discuss why," DRY in documentation, document the engineering trade-offs.
+- Stroustrup, Raskin, Knuth (literate programming), Atwood ("Code Tells You How, Comments Tell You Why").
+- Michael Nygard / Martin Fowler / AWS on Architecture Decision Records for decisions too big to fit in inline comments — including a Nygard-format ADR template in the reference.
+- PEP 257, Google Python Style Guide, JSDoc/TSDoc, XML doc comments, godoc — language-specific docstring conventions.
+
 ### Language-specific
 - **TypeScript:** typescriptlang.org handbook; Matt Pocock (totaltypescript.com, mattpocock.com); Dan Vanderkam, *Effective TypeScript* 2e; TkDodo on barrel files; typescript-eslint docs.
 - **Python:** PEP 8, 20, 257, 484, 585, 604; Astral (ruff, uv) docs; Brett Slatkin, *Effective Python* 3e; Raymond Hettinger PyCon talks.
