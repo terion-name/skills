@@ -83,7 +83,7 @@ For further details see [docs page](docs/agents.md)
 
 | Agent | Description |
 |---|---|
-| [`Orchestrator`](agents/orchestrator.md) | Coordinates delegated implementation, integrates child patches, and keeps the parent workspace focused. It was in mux untill it was [removed](https://github.com/coder/mux/pull/3224) from basic set, alternative provided by @ibetitsmike. |
+| [`Orchestrator`](agents/orchestrator.md) | Coordinates delegated implementation, integrates child patches, and keeps the parent workspace focused. It was in mux untill it was [removed](https://github.com/coder/mux/pull/3224) from basic set, alternative provided by [@ibetitsmike](https://github.com/ibetitsmike). |
 | [`Security Officer`](agents/security_officer.md) | Runs threat-model-driven security reviews and writes `.security/` scan artifacts |
 
 ## Adding skills manually
