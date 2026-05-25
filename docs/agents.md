@@ -39,7 +39,7 @@ The important constraint is that the orchestrator stays out of direct implementa
 
 ## Security Officer
 
-The `Security Officer` agent is a runnable security-review worker. It is designed to compose with the [`security-scan`](../skills/security-scan/) skill.
+The `Security Officer` agent is a runnable security-review worker. It is designed to compose with the [`security-review`](../skills/security-review/) skill.
 
 By default it:
 
@@ -50,13 +50,13 @@ By default it:
 - Writes individual findings under `.security/findings/`.
 - Writes scanner output, validation notes, suggested patches, a scan manifest, and a final report under `.security/`.
 
-It does not apply source-code fixes by default. That is deliberate. A security scan should produce stable evidence and prioritized remediation guidance first; implementation can follow as a separate task.
+It does not apply source-code fixes by default. That is deliberate. A security review should produce stable evidence and prioritized remediation guidance first; implementation can follow as a separate task.
 
 ## How the agents compose with skills
 
 Skills are portable methodology. Agents are runnable personas.
 
-The `security-scan` skill contains the deeper policy references, tooling guidance, templates, severity calibration, and exploit-chaining rules. The `Security Officer` agent contains the runtime behavior: guardrails, artifact locations, tool posture, and final `agent_report` expectations.
+The `security-review` skill contains the deeper policy references, tooling guidance, templates, severity calibration, and exploit-chaining rules. The `Security Officer` agent contains the runtime behavior: guardrails, artifact locations, tool posture, and final `agent_report` expectations.
 
 The same pattern can apply elsewhere. A skill can teach how to do the work; an agent can define how to delegate, isolate, report, and integrate that work in a Mux runtime.
 

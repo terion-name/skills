@@ -1,11 +1,12 @@
 ---
-name: security-scan
+name: security-review
 description: >-
-  Run a thorough, defender-first security scan of a codebase, modeled on the Codex/Aardvark
+  Run a thorough, defender-first security review of a codebase, modeled on the Codex/Aardvark
   pipeline: build (or refresh) a repository threat model, scan code and recent commits for
   vulnerabilities, validate findings by reproducing them in a sandbox, chain exploitable findings
   into attack paths, rank by severity, and write a threat model + findings + summary report into
-  `.security/`. Use this skill whenever the user invokes `/security-scan` or `/sec-scan`, or asks to
+  `.security/`. Use this skill whenever the user invokes `/security-review`, `/sec-review`,
+  `/security-scan`, or `/sec-scan`, or asks to
   "scan for vulnerabilities", "do a security audit/review", "threat model this repo", "find security
   bugs", "check for CVEs / vulnerable dependencies", "look for XSS / SQL injection / SSRF / RCE /
   memory-safety issues", "review this PR/diff for security problems", or otherwise wants an adversarial
@@ -14,7 +15,7 @@ description: >-
   user's own codebase only.
 ---
 
-# Security Scan
+# Security Review
 
 A delegate-first security analysis workflow inspired by Codex Security (Aardvark). You act as the
 **orchestrator**: you build a threat model, decompose the attack surface, fan work out to parallel

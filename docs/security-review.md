@@ -6,7 +6,7 @@ Security review has a failure mode that looks a lot like bad AI code review: the
 
 AI agents make this worse when they treat security as a checklist. They know the vocabulary: XSS, SSRF, SQL injection, secrets, CVEs, deserialization, IAM, container escape. Left unguided, they can produce a report that sounds like a security audit but has no threat model, no reachability analysis, no proof, and no clear next move.
 
-The `security-scan` skill exists to force a better shape:
+The `security-review` skill exists to force a better shape:
 
 **Threat model first.** Before looking for bugs, the agent has to identify assets, trust boundaries, entry points, privileged sinks, assumptions, and what "critical" means for this repository.
 
@@ -70,10 +70,10 @@ The useful standard is narrower: fewer scanner-only false positives, fewer misse
 
 ## Reference map
 
-- [`skills/security-scan/SKILL.md`](../skills/security-scan/SKILL.md) — the main workflow and trigger description.
-- [`references/threat-model.md`](../skills/security-scan/references/threat-model.md) — how to build and refresh the repository threat model.
-- [`references/tooling.md`](../skills/security-scan/references/tooling.md) — scanner choices, commands, ecosystem notes, and offline fallbacks.
-- [`references/reporting.md`](../skills/security-scan/references/reporting.md) — validation, severity, exploit chaining, and report format.
-- [`references/policies/`](../skills/security-scan/references/policies/) — web/API, language, infrastructure, secrets, supply-chain, and memory-safety review policies.
-- [`assets/`](../skills/security-scan/assets/) — templates and worked examples for threat models and findings.
-- [`scripts/init_security.sh`](../skills/security-scan/scripts/init_security.sh) — helper to scaffold `.security/`.
+- [`skills/security-review/SKILL.md`](../skills/security-review/SKILL.md) — the main workflow and trigger description.
+- [`references/threat-model.md`](../skills/security-review/references/threat-model.md) — how to build and refresh the repository threat model.
+- [`references/tooling.md`](../skills/security-review/references/tooling.md) — scanner choices, commands, ecosystem notes, and offline fallbacks.
+- [`references/reporting.md`](../skills/security-review/references/reporting.md) — validation, severity, exploit chaining, and report format.
+- [`references/policies/`](../skills/security-review/references/policies/) — web/API, language, infrastructure, secrets, supply-chain, and memory-safety review policies.
+- [`assets/`](../skills/security-review/assets/) — templates and worked examples for threat models and findings.
+- [`scripts/init_security.sh`](../skills/security-review/scripts/init_security.sh) — helper to scaffold `.security/`.

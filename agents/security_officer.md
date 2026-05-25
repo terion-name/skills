@@ -43,7 +43,7 @@ Unless the task says otherwise:
 - Save validation notes and proof artifacts under `.security/validation/`.
 - Modify only `.security/**`; source-code remediation belongs in a separate explicitly delegated task.
 - If running as a delegated sub-agent, create one git commit containing only `.security/**` artifacts before `agent_report`, unless commits are impossible or explicitly forbidden.
-- Follow the `security-scan` skill (if available) for policies, tooling commands, severity calibration, and report formats 
+- Follow the `security-review` skill (if available) for policies, tooling commands, severity calibration, and report formats 
 
 ## Hard rules
 

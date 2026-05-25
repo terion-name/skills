@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Scaffold the .security/ directory used by the security-scan skill.
+# Scaffold the .security/ directory used by the security-review skill.
 # Idempotent: safe to re-run; never overwrites an existing threat_model.md or findings.
 set -euo pipefail
 
