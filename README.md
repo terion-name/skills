@@ -47,6 +47,28 @@ For further details see [docs page](docs/code-quality.md)
 
 The three code-quality skills interlink: `writing-good-code` and `refactoring-and-reviewing-code` both reference `abstraction-quality` for the extract-vs-duplicate question.
 
+### Security
+
+A defender-first skillset for repository security review: threat model first, tool-assisted scan second, validation before severity, and durable artifacts under `.security/`. It is modeled after the Codex/Aardvark style of scanning: combine deterministic tools with semantic review, then prove or discard findings instead of shipping scanner noise.
+
+#### Philosophy
+
+Security review should be adversarial without becoming theatrical. The goal is not to produce the longest list of possible weaknesses; the goal is to identify realistic attack paths through the system the user actually runs.
+
+Core ideas:
+
+- **Threat model before checklist**; assets, trust boundaries, and reachable entry points decide what matters.
+- **Scanner output is evidence, not a finding**; every serious issue needs code-path validation.
+- **Severity follows exploitability**; reachability and impact beat generic CVSS labels.
+- **Proof stays local and safe**; no external attacks, no secret disclosure, no destructive testing.
+- **Reports are working artifacts**; `.security/` should help the next scan and the remediation pass.
+
+For further details see [docs page](docs/security-scan.md)
+
+| Skill | Description |
+|---|---|
+| [`security-scan`](skills/security-scan/) | Threat-model-driven security scanning, validation, exploit chaining, and `.security/` reporting |
+
 ### API architecture
 
 | Skill | Description |
@@ -93,6 +115,8 @@ Upload each skill folder via the Skills UI, or use `npx skills add terion-name/s
 ### OpenAI Codex CLI
 
 Add to `AGENTS.md` in the repo root (project-level) or `~/.codex/instructions.md` (user-level).
+
+For agent runtimes that understand mux-style persona files, use the files in `agents/` directly. The `Security Officer` agent composes with the `security-scan` skill: the agent supplies the runnable persona and guardrails, while the skill supplies the methodology, policy references, tooling guidance, and report formats.
 
 ### Gemini CLI
 
@@ -159,11 +183,17 @@ Add skill files as context via `.continue/config.json` using the `file` context 
 skills/
 ├── <skill-name>/
 │   ├── SKILL.md          # agent instructions + trigger description (YAML frontmatter)
-│   └── references/       # supporting docs the agent can pull on demand
+│   ├── references/       # supporting docs the agent can pull on demand
+│   ├── assets/           # optional templates and worked examples
+│   └── scripts/          # optional helper scripts
+agents/
+├── <agent-name>.md       # mux-style agent persona (YAML frontmatter + prompt body)
 └── ...
 ```
 
 Each `SKILL.md` has a YAML frontmatter block with `name` and `description` fields. The `description` controls when the agent decides the skill is relevant.
+
+Agent files also use YAML frontmatter. They are not required to use the skills, but they are useful in runtimes that support sub-agents, tool allow/deny lists, and child workspaces.
 
 ## License
 
