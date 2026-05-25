@@ -53,6 +53,17 @@ The three code-quality skills interlink: `writing-good-code` and `refactoring-an
 |---|---|
 | [`orpc-contract-first`](skills/orpc-contract-first/) | oRPC contract-first API design for TypeScript monorepos with contracts in a shared package |
 
+## Agents
+
+[Mux](https://github.com/coder/mux)-style agents live under [`agents/`](agents/). They are persona files for agent runtimes that support delegated workers. The skills remain portable Markdown; the agents add operational behavior for multi-agent workflows.
+
+For further details see [docs page](docs/agents.md)
+
+| Agent | Description |
+|---|---|
+| [`Orchestrator`](agents/orchestrator.md) | Coordinates delegated implementation, integrates child patches, and keeps the parent workspace focused. It was in mux untill it was [removed](https://github.com/coder/mux/pull/3224) from basic set, alternative provided by @ibetitsmike. |
+| [`Security Officer`](agents/security_officer.md) | Runs threat-model-driven security reviews and writes `.security/` scan artifacts |
+
 ## Adding skills manually
 
 The `SKILL.md` files are plain Markdown and work in any harness. Two patterns:
