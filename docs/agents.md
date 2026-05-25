@@ -1,10 +1,14 @@
-# What these agents are, and why they exist
+# What these Coder Mux agents are, and why they exist
 
 ## The problem
 
 Some agent work is too large for one context window and too risky to run as a single wandering process. Implementation tasks need investigation, coding, patch integration, verification, and sometimes follow-up fixes. Security review needs threat modeling, broad scanning, validation, and careful reporting. If one agent tries to hold all of that in its own context, it becomes easier for it to lose the thread, re-read the same files, or mix coordination work with implementation work.
 
-The `agents/` directory contains mux-style persona files for runtimes that support delegated workers. They are not replacements for the skills. They are operational wrappers: they define who the worker is, which tools it can use, what it should not do, and what shape its final report must have.
+The `agents/` directory contains [Coder Mux](https://github.com/coder/mux) agent definition source files. They are Markdown persona files with YAML frontmatter: Mux reads the frontmatter as metadata/tool policy and the Markdown body as the agent's system prompt.
+
+This is not the same thing as `AGENTS.md`. `AGENTS.md` is the emerging cross-tool convention for repository instructions. Mux agent definitions are a Mux-specific format for defining selectable modes and runnable sub-agents.
+
+They are not replacements for the skills. They are operational wrappers: they define who the worker is, which tools it can use, what it should not do, and what shape its final report must have.
 
 ## The philosophy
 
@@ -54,10 +58,10 @@ Skills are portable methodology. Agents are runnable personas.
 
 The `security-scan` skill contains the deeper policy references, tooling guidance, templates, severity calibration, and exploit-chaining rules. The `Security Officer` agent contains the runtime behavior: guardrails, artifact locations, tool posture, and final `agent_report` expectations.
 
-The same pattern can apply elsewhere. A skill can teach how to do the work; an agent can define how to delegate, isolate, report, and integrate that work in a mux-style runtime.
+The same pattern can apply elsewhere. A skill can teach how to do the work; an agent can define how to delegate, isolate, report, and integrate that work in a Mux runtime.
 
 ## Manual use
 
-If your harness supports mux-style agent files, point it at the Markdown files in `agents/`. The YAML frontmatter names the agent, describes it, selects a base runtime, and configures tool additions/removals. The body is the persona prompt.
+Mux discovers project-level agent definitions from `.mux/agents/*.md` and global definitions from `~/.mux/agents/*.md`. Copy or symlink the files from this repo's `agents/` directory into one of those locations.
 
-If your harness does not support these files directly, the prompt body can still be adapted manually. The skills remain the most portable layer: each `SKILL.md` can be loaded natively where supported or pasted into the target agent instructions.
+If another harness does not support Mux agent definitions directly, the prompt body can still be adapted manually, but the frontmatter schema and tool policy are not portable by default. The skills remain the most portable layer: each `SKILL.md` can be loaded natively where supported or pasted into the target agent instructions.

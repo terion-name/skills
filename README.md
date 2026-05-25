@@ -75,9 +75,9 @@ For further details see [docs page](docs/security-scan.md)
 |---|---|
 | [`orpc-contract-first`](skills/orpc-contract-first/) | oRPC contract-first API design for TypeScript monorepos with contracts in a shared package |
 
-## Agents
+## Coder Mux agents
 
-[Mux](https://github.com/coder/mux)-style agents live under [`agents/`](agents/). They are persona files for agent runtimes that support delegated workers. The skills remain portable Markdown; the agents add operational behavior for multi-agent workflows.
+Agent definitions for [Coder Mux](https://github.com/coder/mux) live under [`agents/`](agents/) in this repo. They are Markdown persona files with YAML frontmatter. Unlike `AGENTS.md`, this is a Mux-specific format, not a broadly standardized repository instruction format.
 
 For further details see [docs page](docs/agents.md)
 
@@ -116,7 +116,7 @@ Upload each skill folder via the Skills UI, or use `npx skills add terion-name/s
 
 Add to `AGENTS.md` in the repo root (project-level) or `~/.codex/instructions.md` (user-level).
 
-For agent runtimes that understand mux-style persona files, use the files in `agents/` directly. The `Security Officer` agent composes with the `security-scan` skill: the agent supplies the runnable persona and guardrails, while the skill supplies the methodology, policy references, tooling guidance, and report formats.
+For Coder Mux, copy or symlink the files in `agents/` into `.mux/agents/` for project-level agents or `~/.mux/agents/` for global agents. The `Security Officer` agent composes with the `security-scan` skill: the agent supplies the runnable persona and guardrails, while the skill supplies the methodology, policy references, tooling guidance, and report formats.
 
 ### Gemini CLI
 
@@ -187,13 +187,13 @@ skills/
 │   ├── assets/           # optional templates and worked examples
 │   └── scripts/          # optional helper scripts
 agents/
-├── <agent-name>.md       # mux-style agent persona (YAML frontmatter + prompt body)
+├── <agent-name>.md       # Coder Mux agent definition source
 └── ...
 ```
 
 Each `SKILL.md` has a YAML frontmatter block with `name` and `description` fields. The `description` controls when the agent decides the skill is relevant.
 
-Agent files also use YAML frontmatter. They are not required to use the skills, but they are useful in runtimes that support sub-agents, tool allow/deny lists, and child workspaces.
+Agent files also use YAML frontmatter. They are not required to use the skills, and the format is currently specific to Coder Mux rather than the general `AGENTS.md` convention.
 
 ## License
 
