@@ -5,8 +5,7 @@ description: >-
   pipeline: build (or refresh) a repository threat model, scan code and recent commits for
   vulnerabilities, validate findings by reproducing them in a sandbox, chain exploitable findings
   into attack paths, rank by severity, and write a threat model + findings + summary report into
-  `.security/`. Use this skill whenever the user invokes `/security-review`, `/sec-review`,
-  `/security-scan`, or `/sec-scan`, or asks to
+  `.security/`. Use this skill whenever the user invokes `/security-review`, `/sec-review`, or asks to
   "scan for vulnerabilities", "do a security audit/review", "threat model this repo", "find security
   bugs", "check for CVEs / vulnerable dependencies", "look for XSS / SQL injection / SSRF / RCE /
   memory-safety issues", "review this PR/diff for security problems", or otherwise wants an adversarial
@@ -185,7 +184,7 @@ They do **not** assign final severity — that's your job after validation and c
 ### Scan task brief (Orchestrator → scan sub-agent)
 
 ```
-- Task: Security-scan partition <name> for vulnerabilities.
+- Task: Security-review partition <name> for vulnerabilities.
 - Surface / scope: <files, directories, or attack surface this partition covers>
 - Threat-model context: <relevant trust boundaries + what's reachable, pulled from .security/threat_model.md>
 - Do:
