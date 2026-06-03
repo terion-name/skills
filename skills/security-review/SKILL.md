@@ -2,16 +2,12 @@
 name: security-review
 description: >-
   Run a thorough, defender-first security review of a codebase, modeled on the Codex/Aardvark
-  pipeline: build (or refresh) a repository threat model, scan code and recent commits for
-  vulnerabilities, validate findings by reproducing them in a sandbox, chain exploitable findings
-  into attack paths, rank by severity, and write a threat model + findings + summary report into
-  `.security/`. Use this skill whenever the user invokes `/security-review`, `/sec-review`, or asks to
-  "scan for vulnerabilities", "do a security audit/review", "threat model this repo", "find security
-  bugs", "check for CVEs / vulnerable dependencies", "look for XSS / SQL injection / SSRF / RCE /
-  memory-safety issues", "review this PR/diff for security problems", or otherwise wants an adversarial
-  assessment of code they control. Use it even when the user only gestures at security ("is this code
-  safe?", "anything dangerous here?") on a repo they own. This skill is for DEFENSIVE assessment of the
-  user's own codebase only.
+  pipeline: build/refresh a threat model, scan current code and recent commits for vulnerabilities and
+  serious commit-introduced functional regressions, validate findings, chain exploitable issues, rank by
+  severity, and write `.security/` artifacts. Use whenever the user invokes `/security-review`,
+  `/sec-review`, or asks to scan/audit/review code they control for vulnerabilities, CVEs, XSS, SQLi,
+  SSRF, RCE, secrets, memory-safety bugs, threat modeling, PR/diff security review, or asks whether code
+  is safe. Defensive assessment of the user's own codebase only.
 ---
 
 # Security Review
@@ -65,11 +61,14 @@ Mirror the Codex Security stages. Each stage has a dedicated reference; read it 
 
 1. **Threat model** — establish or refresh `.security/threat_model.md`. See `references/threat-model.md`.
 2. **Scope** — decide what to scan (full repo, a diff, a subtree) and partition it for parallel work.
-3. **Scan** — fan out: deterministic tools (SAST / SCA-CVE / secrets) **and** semantic sub-agent review,
-   in parallel, per surface. See `references/tooling.md` and `references/policies/*`.
+3. **Current-HEAD scan** — fan out across the current tree: deterministic tools (SAST / SCA-CVE /
+   secrets) **and** semantic sub-agent review, in parallel, per surface. See `references/tooling.md` and
+   `references/policies/*`.
 4. **Validate** — reproduce candidate findings in the sandbox to kill false positives. See `references/reporting.md` ("Validation").
 5. **Severity + chaining** — rate each finding and chain related findings into attack paths. See `references/reporting.md`.
 6. **Report** — write one file per finding to `.security/findings/`, then a `.security/report.md` summary.
+7. **Commit history review** — after the current-HEAD sweep, review commits incrementally from oldest to
+   newest, using `.security/latest_reviewed_commit` as the cursor. See `references/commit-history-review.md`.
 
 ## Composing with the Security Officer agent
 
@@ -113,6 +112,9 @@ except where explicitly allowed below — the point is to preserve your context 
 - **Delegate scanning.** Spawn one sub-agent per partition to run the relevant tools and do semantic
   review against the policy files. Run partitions **in parallel** (`run_in_background: true`, then
   `task_await`) — security scanning is embarrassingly parallel across surfaces.
+- **Delegate commit review.** After the current-HEAD sweep, actively spawn commit-review subagents for
+  the incremental commit flow. Keep the queue, cursor, progress log, validation, dedupe, and final
+  artifacts with the orchestrator.
 - **You own validation and severity.** Reproduction judgment, severity calibration, and exploit chaining
   stay with you (the orchestrator), because they require the whole-repo picture the sub-agents lack.
   You may run targeted `bash` here (run a tool, execute a PoC in the sandbox, build the project).
@@ -260,6 +262,36 @@ Finish with a short chat summary: counts by severity, the top one or two attack 
 and the single highest-leverage fix. Keep logs out of chat — point to the files. Do **not** auto-apply
 any patch.
 
+## Step 7 — Commit history review
+
+After the current-HEAD sweep and initial report, read `references/commit-history-review.md` and run the
+incremental per-commit flow unless the user explicitly scoped the request to a single diff/PR or subtree.
+This flow looks for security issues and serious functional regressions introduced by individual commits.
+
+Use `.security/latest_reviewed_commit` as the durable cursor. On the first run, review commits from the
+last 2 months, capped at 1000 commits. On later runs, review commits after the cursor through `HEAD`.
+Always process oldest to newest.
+
+Actively use subagents and keep durable progress:
+
+- Write and update `.security/commit_review_progress.md` with the queue, current batch, completed/skipped
+  counts, and current cursor so a resumed agent can continue without relying on chat context.
+- Spawn commit-review subagents in background batches. Scope each subagent to one commit unless a tiny
+  run of related commits is safer as a small batch.
+- For each commit, first decide whether it is obviously non-functional. Skip docs-only, formatting-only,
+  and purely visual changes when they cannot affect runtime behavior, but record the skip reason.
+- For functional commits, review the diff and trace directly affected logic: call paths, trust boundaries,
+  downstream consumers, config/defaults, data/control flow, and security-sensitive invariants.
+- After each commit is assessed or skipped, write that SHA to `.security/latest_reviewed_commit`.
+
+Use the same validation, severity, chaining, and finding format as the current-HEAD scan. If a commit
+introduced an issue, set `Commit: <introducing sha>` in the finding metadata. Before writing, reconcile
+against `.security/findings/` and `.security/fixed/`: enrich an existing report if it is the same issue;
+write to `.security/findings/` if still present; write to `.security/fixed/` with `Fixed in commit:
+<sha>` if a later commit already fixed it. After the per-commit pass, update `.security/report.md` and
+`.security/scan_manifest.md` with commit-review coverage, skipped commits, new/enriched findings, and
+the latest cursor.
+
 ## `.security/` layout
 
 This layout matches the **Security Officer** agent so the two are drop-in compatible (see "Composing
@@ -268,6 +300,8 @@ with the Security Officer agent" below):
 ```
 .security/
 ├── threat_model.md            # persistent; created once, refreshed as architecture changes
+├── latest_reviewed_commit     # latest commit SHA assessed by the incremental commit-review flow
+├── commit_review_progress.md  # in-flight commit queue/progress so long reviews can resume
 ├── report.md                  # latest scan summary (exec summary + severity table + chains + coverage)
 ├── scan_manifest.md           # tools run/skipped, versions, commands, exit codes, coverage statement
 ├── findings/
@@ -279,10 +313,10 @@ with the Security Officer agent" below):
 │   └── SEC-NNN/               # repro notes, commands, captured output/artifacts per finding
 ```
 
-Keep `threat_model.md`, `report.md`, `scan_manifest.md`, `findings/`, and `fixed/` committed so the
-security context persists across scans (later scans get faster by focusing on new commits, like Codex
-incremental scans). Raw files in `tool-results/` and bulky `validation/` artifacts can be gitignored if
-noisy.
+Keep `threat_model.md`, `latest_reviewed_commit`, `commit_review_progress.md`, `report.md`,
+`scan_manifest.md`, `findings/`, and `fixed/` committed so the security context persists across scans
+(later scans get faster by focusing on new commits, like Codex incremental scans). Raw files in
+`tool-results/` and bulky `validation/` artifacts can be gitignored if noisy.
 
 ## Reference map
 
@@ -290,7 +324,10 @@ noisy.
 - `references/tooling.md` — security tools per ecosystem (SAST, SCA/CVE, secrets, fuzzing), install +
   run commands, and offline fallbacks. Read before Step 3.
 - `references/reporting.md` — validation method, severity/criticality calibration, exploit chaining, and
-  the finding + summary report formats. Read before Steps 4–6.
+  the finding + summary report formats. Read before Steps 4–7.
+- `references/commit-history-review.md` — incremental per-commit review after the current-HEAD sweep:
+  cursor handling, commit selection, skip rules, subagent prompt, and fixed/unresolved reconciliation.
+  Read before Step 7.
 - `references/policies/` — strict per-surface security rules. Read the ones matching the repo's stack:
   - `web-and-api.md` — injection (SQL/NoSQL/command/LDAP), XSS, SSRF, CSRF, IDOR/broken authz, SSTI,
     path traversal, open redirect, insecure deserialization, auth/session, rate-limiting, CORS, headers.

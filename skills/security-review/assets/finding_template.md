@@ -5,11 +5,12 @@ Origin: <introduced-by-diff|pre-existing|uncertain>   # commit/diff mode only; o
 
 # Metadata
 Repo: <owner/name>
-Commit: <short sha>
+Commit: <introducing short sha, or reviewed HEAD/diff sha when not known>
+Fixed in commit: <short sha if already fixed; omit if unresolved>
 Author: <if known>
 Created: <date, time>
-Category: <auth|injection|ssrf|supply-chain|secrets|cve|container|iac|crypto|memory|other>
-Detected by: <manual review|semgrep|trivy|osv-scanner|gitleaks|codeql|other>
+Category: <auth|injection|ssrf|supply-chain|secrets|cve|container|iac|crypto|memory|functional-regression|other>
+Detected by: <manual review|commit-review|semgrep|trivy|osv-scanner|gitleaks|codeql|other>
 Assignee: <Unassigned>
 Signals: Security, <Validated|Likely|Unvalidated>, <Patch generated>, <Attack-path>
 Resolution: <if applicable>

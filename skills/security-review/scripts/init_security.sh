@@ -25,6 +25,8 @@ else
 fi
 
 echo "[init] .security/ ready at: $SEC_DIR"
+echo "       latest_reviewed_commit -> cursor written after each commit-history review step"
+echo "       commit_review_progress.md -> in-flight commit queue/progress log"
 echo "       findings/     -> one finding per file (SEC-NNN-slug.md), chronological IDs"
 echo "       fixed/        -> remediated findings moved here, keeping original SEC-NNN IDs"
 echo "       tool-results/ -> raw scanner output only (gitignored)"

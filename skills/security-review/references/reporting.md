@@ -1,6 +1,6 @@
 # Validation, severity, chaining, and reporting
 
-This covers Steps 4–6: how to validate a candidate, how to rate it, how to chain findings, and the exact
+This covers Steps 4–7: how to validate a candidate, how to rate it, how to chain findings, and the exact
 output formats. The target shapes are `assets/example_finding.md` (per finding) and the summary table below.
 
 ---
@@ -109,9 +109,11 @@ One file per finding at `.security/findings/SEC-NNN-<slug>.md`, following `asset
 - **Header:** `Title`, `Criticality: <level> (attack path: <level>)`, `Status: <validated|likely|
   unvalidated|false-positive>`. In commit/diff mode, also tag `Origin: <introduced-by-diff|pre-existing|
   uncertain>` so reviewers know whether the PR caused it.
-- **# Metadata:** repo, commit, author (if known), created date, category (`auth|injection|ssrf|
-  supply-chain|secrets|cve|container|iac|crypto|memory|other`), detected-by (`manual|semgrep|trivy|...`),
-  signals (e.g. `Security, Validated, Patch generated, Attack-path`), resolution if applicable.
+- **# Metadata:** repo, commit, fixed-in commit if applicable, author (if known), created date, category
+  (`auth|injection|ssrf|supply-chain|secrets|cve|container|iac|crypto|memory|functional-regression|other`),
+  detected-by (`manual|semgrep|trivy|commit-review|...`), signals (e.g. `Security, Validated, Patch
+  generated, Attack-path`), resolution if applicable. In commit-history review, `Commit` is the commit
+  that introduced the issue; `Fixed in commit` is the later commit that remediated it, if already fixed.
 - **# Summary:** plain-language description of the bug, the root cause, *and* the fix direction, in a
   few sentences. A reader should understand the whole thing from this alone.
 - **# Validation:** the `## Rubric` checkboxes you confirmed, then a `## Report` paragraph describing how
@@ -139,6 +141,12 @@ When a finding is remediated, move its file from `.security/findings/` to `.secu
 its metadata with `Resolution: fixed`, the fix commit/date if known, and any follow-up validation notes.
 Leave the original filename/ID intact so historical reports, validation artifacts, and attack chains
 remain traceable.
+
+Commit-history review can create fixed historical reports directly: if an old commit introduced a bug
+that a later commit already fixed, write the standard finding to `.security/fixed/` with `Commit:
+<introducing sha>`, `Fixed in commit: <fix sha>`, and `Resolution: fixed`. If the same issue already
+exists in `.security/findings/` or `.security/fixed/`, enrich the existing report with the commit evidence
+instead of creating a duplicate.
 
 ## Tool-derived findings
 
@@ -191,6 +199,11 @@ raw scanner output and `scan_manifest.md` are enough.
 ## Fixed findings
 - <SEC-NNN> — <title>, fixed in <commit/date if known>. Link to fixed/SEC-NNN-...md.
 
+## Commit history review
+- Cursor: <latest reviewed commit, or none>
+- Range reviewed: <oldest>..<newest>; <n> reviewed, <n> skipped as non-functional.
+- New findings from commits: <ids>. Enriched existing findings: <ids>. Fixed historical findings: <ids>.
+
 ## Coverage
 - Scanned: <surfaces / dirs / diff>. Languages: <...>. See scan_manifest.md for tools + commands.
 - Manual review covered: <security-sensitive areas inspected>.
@@ -227,6 +240,7 @@ If there are no findings, say so clearly and still include coverage, skipped too
 - Languages / package managers: <...>
 - IaC / container / CI files: <...>
 - Auth & secret surfaces, public entry points reviewed: <...>
+- Commit history review: <range, count reviewed/skipped, latest cursor, progress file path>.
 - Any project-code-executing commands run (and why): <... or "none">
 ```
 
