@@ -91,10 +91,11 @@ four-status validation vocab, so their artifacts interleave cleanly. Two pattern
   **Collision caveat for parallel agents:** N agents each writing `.security/` and committing in their
   own child workspace will collide on `SEC-NNN` numbering and on `scan_manifest.md`/`report.md`. Avoid
   this by having each partition agent write only into `.security/findings/` with a **partition-prefixed
-  slug** (e.g. `SEC-auth-001`, `SEC-iac-001`) and its tool output into `.security/tool-results/<partition>/`,
-  and by reserving `report.md`, `scan_manifest.md`, and final `SEC-NNN` renumbering for the orchestrator
-  after `task_await`. Tell each agent not to write the summary/manifest. The orchestrator merges,
-  renumbers by severity, builds the chains, and writes the top-level artifacts.
+  slug** (e.g. `SEC-auth-001`, `SEC-iac-001`) and its raw tool output into
+  `.security/tool-results/<partition>/`, and by reserving `report.md`, `scan_manifest.md`, and final
+  `SEC-NNN` numbering for the orchestrator after `task_await`. Tell each agent not to write the
+  summary/manifest. The orchestrator merges, assigns final IDs after the highest existing ID in
+  `.security/findings/` and `.security/fixed/`, builds the chains, and writes the top-level artifacts.
 
 Division of labor: the **agent** owns the persona, guardrails, and per-finding review; the **skill** owns
 the deep per-language policies, severity calibration, and cross-finding exploit chaining. Keep them in
@@ -121,6 +122,8 @@ except where explicitly allowed below — the point is to preserve your context 
   findings; you do not apply them. If the user explicitly asks you to fix afterward, that's a separate
   step (and a good fit for the `orchestrate` skill).
 - **Artifacts are append-only-ish.** Never delete prior findings without the user's say-so; supersede them.
+  When a finding is fixed, move it from `.security/findings/` to `.security/fixed/` and keep its original
+  `SEC-NNN` ID. Never recycle IDs.
 
 ## Prerequisites
 
@@ -191,6 +194,8 @@ They do **not** assign final severity — that's your job after validation and c
   1. Run the deterministic tools listed in references/tooling.md for this partition's languages. Save
      raw tool output under .security/tool-results/ (one file per tool, JSON/SARIF where supported). Only
      run "safe/static" tools per the skill's repo-safety tiering — never project install/build scripts.
+     If a tool reports anything that survives triage or cannot be dismissed, turn it into a normal
+     candidate finding; do not write Markdown summaries in .security/tool-results/.
   2. Semantically review the code against references/policies/<relevant>.md. Look specifically for the
      sink patterns and dangerous APIs listed there.
   3. For each suspected issue, trace source -> sink and confirm it against the actual code (no tool-only findings).
@@ -238,8 +243,10 @@ Write artifacts (read `references/reporting.md` for the exact templates, and use
 - **One file per finding** at `.security/findings/SEC-NNN-<slug>.md`, in the `assets/example_finding.md` shape:
   title, criticality (with attack-path severity), status, metadata, summary, validation (rubric + report),
   evidence (code excerpts with notes), proposed patch (diff), and attack-path analysis (final/likelihood/
-  impact/assumptions/path/path-evidence/narrative/controls/blindspots). Number `SEC-001` = most severe.
-  Put repro artifacts under `.security/validation/SEC-NNN/` and the diff under `.security/patches/`.
+  impact/assumptions/path/path-evidence/narrative/controls/blindspots). Assign IDs chronologically by
+  starting after the highest `SEC-NNN` already present in `.security/findings/` or `.security/fixed/`;
+  do not renumber or reuse fixed IDs. Put repro artifacts under `.security/validation/SEC-NNN/`. Keep
+  proposed patches embedded in the finding file.
 - **A scan manifest** at `.security/scan_manifest.md`: tools detected + versions, commands run + exit
   codes + output paths (flagged static vs. project-executing), tools skipped + why (missing binary,
   unsupported ecosystem, no network, too risky, timeout), and a coverage statement (languages, package
@@ -264,17 +271,18 @@ with the Security Officer agent" below):
 ├── report.md                  # latest scan summary (exec summary + severity table + chains + coverage)
 ├── scan_manifest.md           # tools run/skipped, versions, commands, exit codes, coverage statement
 ├── findings/
-│   └── SEC-NNN-slug.md        # one finding per file (example_finding shape), numbered by severity
-├── tool-results/              # raw scanner output (JSON/SARIF), one file per tool; gitignored if noisy
-├── validation/
+│   └── SEC-NNN-slug.md        # one finding per file (example_finding shape), chronological IDs
+├── fixed/
+│   └── SEC-NNN-slug.md        # fixed findings moved here; IDs stay reserved for future scans
+├── tool-results/              # raw scanner output only; actionable hits become normal findings
+└── validation/
 │   └── SEC-NNN/               # repro notes, commands, captured output/artifacts per finding
-└── patches/
-    └── SEC-NNN-suggested.patch  # proposed (never auto-applied) fix diffs
 ```
 
-Keep `threat_model.md`, `report.md`, `scan_manifest.md`, `findings/`, and `patches/` committed so the
+Keep `threat_model.md`, `report.md`, `scan_manifest.md`, `findings/`, and `fixed/` committed so the
 security context persists across scans (later scans get faster by focusing on new commits, like Codex
-incremental scans). `tool-results/` (and bulky `validation/` artifacts) can be gitignored if noisy.
+incremental scans). Raw files in `tool-results/` and bulky `validation/` artifacts can be gitignored if
+noisy.
 
 ## Reference map
 

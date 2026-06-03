@@ -83,7 +83,7 @@ roles/plugins/tasks/main.yml (L72 to 79)
     - plugin_bundle_download.changed or not plugin_index.stat.exists
 ```
 
-Proposed patch (also saved to `.security/patches/SEC-001-suggested.patch`):
+Proposed patch:
 ```diff
 --- a/roles/plugins/tasks/main.yml
 +++ b/roles/plugins/tasks/main.yml

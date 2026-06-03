@@ -120,14 +120,37 @@ One file per finding at `.security/findings/SEC-NNN-<slug>.md`, following `asset
 - **# Evidence:** the minimal code excerpts (`path (Lstart to Lend)`) with a one-line note above each
   explaining what it shows. Keep excerpts short — enough to prove the point, not whole files. Reference
   the supporting `.security/tool-results/<tool>` entry where a tool corroborated it. Redact any secret.
-- **Proposed patch:** a unified `diff` that fixes the root cause minimally (also saved to
-  `.security/patches/SEC-NNN-suggested.patch`). Propose only — never apply.
+- **Proposed patch:** a unified `diff` that fixes the root cause minimally. Keep the patch embedded in
+  the finding; do not create a separate patch artifact. Propose only — never apply during the scan.
 - **# Attack-path analysis:** `Final | Decider | Matrix severity | Policy adjusted`, then `## Rationale`,
   `## Likelihood`, `## Impact`, `## Assumptions`, `## Path` (one-line arrow chain), `## Path evidence`
   (`path:line` per hop), `## Narrative`, `## Controls` (what's missing), `## Blindspots` (what you
   couldn't fully verify). This block is what lets a reviewer trust the severity.
 
-Number findings by descending severity (`SEC-001` = most severe) so the directory reads in priority order.
+## Finding numbering and lifecycle
+
+Assign finding IDs chronologically. For every scan, including the first one, inspect both
+`.security/findings/` and `.security/fixed/`, find the highest existing `SEC-NNN`, and assign new
+findings starting at the next unused ID. Do not reuse IDs from fixed findings, and do not renumber old
+findings when severity changes. Severity belongs in the finding metadata and the severity-sorted summary
+table, not in the ID sequence.
+
+When a finding is remediated, move its file from `.security/findings/` to `.security/fixed/` and update
+its metadata with `Resolution: fixed`, the fix commit/date if known, and any follow-up validation notes.
+Leave the original filename/ID intact so historical reports, validation artifacts, and attack chains
+remain traceable.
+
+## Tool-derived findings
+
+Raw scanner output is evidence, not a report. Store it under `.security/tool-results/`, then triage the
+hits against the actual code. Any actionable tool-derived issue that survives code/dataflow confirmation
+and validation becomes a standard `.security/findings/SEC-NNN-<slug>.md` file using the normal per-finding
+format above. Set `Detected by` to the tool name (for example `semgrep`, `trivy`, or `gitleaks`) and link
+the raw output path in `# Evidence` or `# Validation`.
+
+Do not write Markdown summaries under `.security/tool-results/`. Dismissed tool hits belong in
+`.security/report.md` under "Considered and dismissed" when they are relevant to coverage; otherwise the
+raw scanner output and `scan_manifest.md` are enough.
 
 ---
 
@@ -164,6 +187,9 @@ Number findings by descending severity (`SEC-001` = most severe) so the director
 
 ## Considered and dismissed (false positives)
 - <candidate> — why it's not exploitable.
+
+## Fixed findings
+- <SEC-NNN> — <title>, fixed in <commit/date if known>. Link to fixed/SEC-NNN-...md.
 
 ## Coverage
 - Scanned: <surfaces / dirs / diff>. Languages: <...>. See scan_manifest.md for tools + commands.

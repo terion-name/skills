@@ -6,9 +6,11 @@ coverage and find known-CVE dependencies and obvious sink patterns fast; semanti
 finding** — always confirm it against real code and validate before reporting.
 
 Sub-agents run these per partition and save raw output under `.security/tool-results/` (one file per
-tool, JSON/SARIF where supported). Prefer tools already present; install only when allowed and useful.
-If network/install is blocked, fall back to the `grep`-able patterns in the policy files and to code
-review — record the gap as a blindspot.
+tool, JSON/SARIF where supported). If a tool reports hits, triage them against code and turn confirmed
+actionable issues into normal `.security/findings/SEC-NNN-<slug>.md` reports; do not create readable
+Markdown summaries under `.security/tool-results/`. Prefer tools already present; install only when
+allowed and useful. If network/install is blocked, fall back to the `grep`-able patterns in the policy
+files and to code review — record the gap as a blindspot.
 
 **Run only "safe/static" tools by default.** Everything here reads code, manifests, or lockfiles without
 executing the project. Do **not** run `npm/pip/bundle install`, builds, `go generate`, `make`, test
@@ -17,7 +19,8 @@ suites, or Docker builds just to make a scanner happy — those run attacker-con
 hosted SaaS (Snyk, hosted CodeQL) unless the repo is already configured for it. Note any tool that
 downloads a rules/CVE DB. **A non-zero exit because a scanner found issues is normal** — capture the exit
 code in `scan_manifest.md` and continue; don't abort the scan.
-Prompt user to install required tools if they are not available and you can't install them yourself in local userspace or sandbox (give the user concrete list of commands to install them)
+Prompt the user to install required tools if they are unavailable and you cannot install them yourself
+in local userspace or the sandbox. Give the user a concrete command list.
 
 ## Detect what's present first
 
@@ -134,3 +137,6 @@ Many tools emit SARIF — a common format you can merge and dedupe. Have sub-age
 `{tool, rule, path:line, severity, message}` in their report so you can cross-reference tool hits against
 the semantic findings during validation. Where two independent tools flag the same location, confidence
 is higher; where only one does, scrutinize harder.
+
+Raw tool output stays in `.security/tool-results/`. The human-readable artifact for a confirmed tool hit
+is the standard finding file in `.security/findings/`; tool-only noise does not get its own report.
