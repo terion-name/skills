@@ -113,8 +113,9 @@ except where explicitly allowed below — the point is to preserve your context 
   review against the policy files. Run partitions **in parallel** (`run_in_background: true`, then
   `task_await`) — security scanning is embarrassingly parallel across surfaces.
 - **Delegate commit review.** After the current-HEAD sweep, actively spawn commit-review subagents for
-  the incremental commit flow. Keep the queue, cursor, progress log, validation, dedupe, and final
-  artifacts with the orchestrator.
+  the incremental commit flow. Prefer many one-commit subagents over broad queue workers, and require each
+  no-finding result to include the invariants, callers, and future touches it checked. Keep the queue,
+  cursor, progress log, validation, dedupe, and final artifacts with the orchestrator.
 - **You own validation and severity.** Reproduction judgment, severity calibration, and exploit chaining
   stay with you (the orchestrator), because they require the whole-repo picture the sub-agents lack.
   You may run targeted `bash` here (run a tool, execute a PoC in the sandbox, build the project).

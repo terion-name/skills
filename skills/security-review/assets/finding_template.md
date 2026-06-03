@@ -1,5 +1,5 @@
 <One-line title: what the bug is and its primary impact>
-Criticality: <critical|high|medium|low> (attack path: <critical|high|medium|low>)
+Criticality: <critical|high|medium|low|informational> (attack path: <critical|high|medium|low|informational>)
 Status: <validated|likely|unvalidated|false-positive>
 Origin: <introduced-by-diff|pre-existing|uncertain>   # commit/diff mode only; omit for full audits
 

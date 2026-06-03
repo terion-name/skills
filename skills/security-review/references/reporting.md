@@ -71,10 +71,15 @@ Severity definitions come from the threat model's §4 calibration. If none exist
 | **High** | Authenticated privesc; cross-tenant data exposure; local→root needing only low-priv access; management auth bypass. |
 | **Medium** | Local unprivileged secret/file disclosure; DoS; missing crypto integrity (availability only); operator-only injection. |
 | **Low** | Static-docs XSS; verbose error leakage; CI/test-only with no released-artifact impact; missing rate-limit behind an IdP. |
+| **Informational** | Security-adjacent correctness, hardening, observability, or operational regression with no confirmed attacker-controlled exploit path yet, but useful for history and follow-up. |
 
 Be honest about what *lowers* severity — local-only, requires operator action, requires a pre-existing
 foothold. The example finding keeps a root-file-write at **high** rather than critical precisely because
 it's local-only and needs a root playbook run. Calibrated severity builds trust; inflated severity burns it.
+
+In commit-history review, keep informational candidates when they affect a security control, billing or
+resource-accounting invariant, tenant/session lifecycle, release safety, or evidence needed to validate a
+future exploit chain. Mark them `informational` rather than dropping them as "not security" too early.
 
 ---
 
