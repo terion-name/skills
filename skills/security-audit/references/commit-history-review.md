@@ -32,6 +32,11 @@ agent can continue without relying on conversation context. Record enough detail
 whether a commit was truly investigated or merely skimmed: commit SHA, subject, changed paths, decision,
 invariants checked, related symbols/callers traced, candidate count, and cursor after the decision.
 
+The history pass is complete only when every queued commit has a recorded decision and
+`.security/latest_reviewed_commit` equals the audited `HEAD`. A written queue, partial progress file, or
+"remaining commits" note is not completion. If the queue is large, keep processing in waves until it is
+empty; do not stop after the current-HEAD sweep or after creating the queue.
+
 ## Commit triage
 
 For each commit, inspect metadata and changed paths first (`git show --stat --name-status --format=fuller
@@ -181,6 +186,10 @@ to skim. Keep each subagent scoped to one commit. Only batch commits together wh
 tiny, and form a single logical change; the batch result must still include a separate decision and probe
 checklist for each commit. Use `run_in_background: true`, then await the wave. After every completed
 commit, update `.security/latest_reviewed_commit` to that SHA and update `.security/commit_review_progress.md`.
+
+Never advance the cursor past a commit that has not been assessed or explicitly skipped with a valid
+non-functional reason. Never report "audit complete" while the progress file contains pending commits.
+Before the final summary, the completion gate will verify that the cursor reached `HEAD`.
 
 Commit subagent prompt shape:
 

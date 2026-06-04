@@ -66,11 +66,14 @@ Mirror the Codex Security stages. Each stage has a dedicated reference; read it 
 3. **Current-HEAD scan** — fan out across the current tree: deterministic tools (SAST / SCA-CVE /
    secrets) **and** semantic sub-agent review, in parallel, per surface. See `references/tooling.md` and
    `references/policies/*`.
-4. **Validate** — reproduce candidate findings in the sandbox to kill false positives. See `references/reporting.md` ("Validation").
+4. **Validate** — triage every tool output first, then reproduce candidate findings in the sandbox to
+   kill false positives. See `references/reporting.md` ("Validation").
 5. **Severity + chaining** — rate each finding and chain related findings into attack paths. See `references/reporting.md`.
 6. **Report** — write one file per finding to `.security/findings/`, then a `.security/report.md` summary.
 7. **Commit history review** — after the current-HEAD sweep, review commits incrementally from oldest to
    newest, using `.security/latest_reviewed_commit` as the cursor. See `references/commit-history-review.md`.
+8. **Completion gate** — run `scripts/audit_completion_gate.py` before the final chat summary. If it
+   fails, the audit is not complete; continue the missing work instead of reporting success.
 
 ## Composing with the Security Officer agent
 
@@ -137,6 +140,10 @@ except where explicitly allowed below — the point is to preserve your context 
 - **Artifacts are append-only-ish.** Never delete prior findings without the user's say-so; supersede them.
   When a finding is fixed, move it from `.security/findings/` to `.security/fixed/` and keep its original
   `SEC-NNN` ID. Never recycle IDs.
+- **No false completion.** Do not say "complete" or produce the final chat summary until the completion
+  gate passes. If history was in scope, `.security/latest_reviewed_commit` must reach the audited `HEAD`.
+  If `.security/tool-results/` contains scanner output, `.security/tool_triage.md` must account for every
+  raw result file and every CVE/GHSA/advisory ID as a finding, explicit dismissal, or blocked validation.
 
 ## Prerequisites
 
@@ -216,7 +223,10 @@ deterministic tooling catch different bugs:
    use containers rather than host-local binaries. If Step 0 did not complete, or degraded local-only
    scanning was not explicitly approved by the user, stop and ask the orchestrator to complete Step 0.
    Tool output is *input to triage*, not a finding by itself — every tool hit must be confirmed against
-   real code before it becomes a candidate.
+   real code before it becomes a candidate. But raw tool output is never allowed to stay untriaged.
+   After tools run, write `.security/tool_triage.md` using `assets/tool_triage_template.md`: one row per
+   tool-output file, and for SCA/CVE tools one row per advisory ID (`CVE-*`, `GHSA-*`, ecosystem
+   advisory) with decision `finding:<SEC-NNN>`, `candidate`, `dismissed:<reason>`, or `blocked:<reason>`.
 2. **Semantic review** against the relevant policy file(s) in `references/policies/`. These encode the
    strict rules per language/surface (injection, XSS, SSRF, deserialization, auth/IDOR, memory safety,
    secrets, IaC, etc.) with the dangerous patterns and the sinks to grep for.
@@ -231,7 +241,7 @@ They do **not** assign final severity — that's your job after validation and c
 ### Scan task brief (Orchestrator → scan sub-agent)
 
 ```
-- Task: Security-review partition <name> for vulnerabilities.
+- Task: Security-audit partition <name> for vulnerabilities.
 - Surface / scope: <files, directories, or attack surface this partition covers>
 - Threat-model context: <relevant trust boundaries + what's reachable, pulled from .security/threat_model.md>
 - Do:
@@ -250,7 +260,10 @@ They do **not** assign final severity — that's your job after validation and c
      accounting, workflow state, idempotency/replay, lifecycle cleanup).
   5. For each suspected issue, trace source -> sink or invariant break and confirm it against the actual
      code (no tool-only findings).
-  6. Record tools run/skipped (+ versions, commands, exit codes, why-skipped) for the manifest.
+  6. Report every raw tool output path and every CVE/GHSA/advisory ID found by SCA tools with a triage
+     decision. Production/runtime dependency CVEs that are reachable or whose reachability cannot be
+     disproven with code/package evidence must become candidate findings; do not bury them in raw output.
+  7. Record tools run/skipped (+ versions, commands, exit codes, why-skipped) for the manifest.
 - Report back: a list of CANDIDATE findings. Each = {title, path:line, vuln_class, one_line_why,
   source_to_sink_flow_or_broken_invariant, standards_mapping_if_obvious, supporting evidence snippets}.
   Mark anything you could not confirm as "needs validation".
@@ -261,7 +274,17 @@ They do **not** assign final severity — that's your job after validation and c
 ## Step 4 — Validate (you, the orchestrator)
 
 This is the step that separates a real finding from scanner noise — Codex's core value-add. Read the
-"Validation" section of `references/reporting.md`. For each candidate (prioritize the scariest first):
+"Validation" and "Tool-derived findings" sections of `references/reporting.md`.
+
+First, finish tool triage. `.security/tool_triage.md` is mandatory whenever `.security/tool-results/`
+contains output. For each scanner output file, record whether it produced findings, was dismissed, or
+failed. For each dependency advisory from Trivy/Grype/OSV/Dependency-Check/dep-scan/npm/pnpm/yarn/etc.,
+record the advisory ID, package, installed version, fixed version if known, dependency scope, runtime
+reachability evidence, decision, and linked finding or dismissal reason. If a vulnerable production
+dependency is reachable, or reachability cannot be disproven with concrete code/package evidence, promote
+it to a candidate finding with `Category: cve` or `supply-chain`.
+
+Then validate candidates (prioritize the scariest first):
 
 - Decide whether it's reproducible. Where practical, **reproduce it in the sandbox**: craft the minimal
   PoC that proves the source reaches the sink (a payload that triggers the SQL/command/path, a tar entry
@@ -300,6 +323,9 @@ Write artifacts (read `references/reporting.md` for the exact templates, and use
   `.security/fixed/`; do not count deleted tracked files from git history. Do not renumber or reuse fixed
   IDs that still exist in the worktree. Put repro artifacts under `.security/validation/SEC-NNN/`. Keep
   proposed patches embedded in the finding file.
+- **Tool triage** at `.security/tool_triage.md` using `assets/tool_triage_template.md`: every raw
+  scanner output file and every dependency advisory/CVE/GHSA from tool output must have a decision,
+  linked finding, or explicit dismissal/blocker.
 - **A scan manifest** at `.security/scan_manifest.md`: Step 0 tooling preflight decision, Docker status,
   required scanner images, tools detected + versions, commands run + exit codes + output paths (flagged
   static vs. project-executing), tools skipped + why (container image unavailable, DB/rules blocked,
@@ -308,8 +334,8 @@ Write artifacts (read `references/reporting.md` for the exact templates, and use
   points). This makes coverage auditable.
 - **A summary** at `.security/report.md`: executive summary, scope, a severity-sorted findings table
   (ID, severity, status, title, location, link), the chained attack paths, dependency/CVE summary (only
-  actionable, with reachability), redacted secrets summary, false positives considered, tool + manual
-  coverage, recommended next actions, and blindspots / what wasn't scanned.
+  actionable, with reachability), tool triage summary, redacted secrets summary, false positives
+  considered, tool + manual coverage, recommended next actions, and blindspots / what wasn't scanned.
 
 Do not stop here when commit history is in scope. The current-HEAD report is an interim checkpoint; keep
 going into Step 7 in the same run unless the user explicitly scoped the audit to current HEAD / a single
@@ -349,11 +375,29 @@ against deleted reports from git history unless the user explicitly asked to res
 After the per-commit pass, update `.security/report.md` and `.security/scan_manifest.md` with
 commit-review coverage, skipped commits, new/enriched findings, and the latest cursor.
 
-Only after Step 7 is complete or explicitly out of scope, finish with a short chat summary: counts by
-severity, the top one or two attack paths in plain language, the highest-leverage fix, and the commit
-history cursor/coverage. Keep logs out of chat; point to the files. If findings exist, include a short
-"Upload findings" note with user-run commands for GitHub/GitLab/Plane or point to the uploader `--help`;
-do not run those scripts unless the upload rule below was satisfied.
+## Step 8 — Completion gate
+
+Before the final chat summary, run the deterministic completion gate and save its output:
+
+```bash
+scripts/audit_completion_gate.py --history-required yes > .security/completion_gate.txt 2>&1
+```
+
+Use `--history-required no` only when the user's original prompt explicitly scoped the audit to current
+HEAD, a diff/PR, or a subtree and the report/manifest state why history is out of scope.
+
+If the gate fails, do **not** report the audit as complete. Fix the missing work:
+
+- If history is incomplete, continue Step 7 until `.security/latest_reviewed_commit` equals `git rev-parse HEAD`.
+- If tool outputs are untriaged, finish `.security/tool_triage.md`; create findings for actionable or
+  not-disproven production CVEs, and record evidence-backed dismissals for non-actionable advisories.
+- If a required artifact is missing, write it.
+
+Only after the gate passes, finish with a short chat summary: counts by severity, the top one or two
+attack paths in plain language, the highest-leverage fix, and the commit history cursor/coverage. Keep
+logs out of chat; point to the files. If findings exist, include a short "Upload findings" note with
+user-run commands for GitHub/GitLab/Plane or point to the uploader `--help`; do not run those scripts
+unless the upload rule below was satisfied.
 
 ## `.security/` layout
 
@@ -368,6 +412,8 @@ with the Security Officer agent" below):
 ├── commit_review_progress.md  # in-flight commit queue/progress so long reviews can resume
 ├── report.md                  # latest scan summary (exec summary + severity table + chains + coverage)
 ├── scan_manifest.md           # tools run/skipped, versions, commands, exit codes, coverage statement
+├── tool_triage.md             # every tool output/advisory mapped to finding/dismissal/blocker
+├── completion_gate.txt        # output of scripts/audit_completion_gate.py from the final pass
 ├── findings/
 │   └── SEC-NNN-slug.md        # one finding per file (example_finding shape), chronological IDs
 ├── fixed/
@@ -440,11 +486,14 @@ scripts/upload_findings_plane.py --project-id workspace-slug/project-uuid --host
     downloads, `curl | bash`, CI/release-artifact integrity, lockfile/typosquat risks.
   - `infra-and-iac.md` — Docker/Compose, Kubernetes, Terraform, Ansible, cloud IAM, network exposure,
     privilege/escape, world-writable paths (the `assets/example_finding.md` bug class).
-- `assets/threat_model_template.md`, `assets/finding_template.md` — fill-in templates.
+- `assets/threat_model_template.md`, `assets/finding_template.md`, `assets/tool_triage_template.md` —
+  fill-in templates.
 - `assets/example_finding.md`, `assets/example_threat_model.md` — anonymized, fully worked examples
   showing the target shape and quality bar. Read these to calibrate voice and depth before writing your own.
 - `scripts/init_security.sh` — scaffold the `.security/` directory.
 - `scripts/tooling_preflight.py` — fingerprint the repo, check Docker, identify required scanner images
   and missing local tools, and write `.security/tooling_preflight.md`.
+- `scripts/audit_completion_gate.py` — fail-fast guard before the final summary; verifies required
+  artifacts, history cursor completion, and scanner/advisory triage.
 - `scripts/upload_findings_github.py`, `scripts/upload_findings_gitlab.py`, `scripts/upload_findings_plane.py` —
   upload parsed findings to issue trackers from a user-controlled network environment.

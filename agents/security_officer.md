@@ -39,8 +39,13 @@ Unless the task says otherwise:
 - Create or update `.security/threat_model.md` before final triage.
 - Save individual findings under `.security/findings/`.
 - Save raw scanner outputs only under `.security/tool-results/`; actionable tool hits become normal finding files.
+- Save `.security/tool_triage.md`; every raw tool output and dependency advisory must be mapped to a
+  finding, explicit dismissal, or blocker.
 - Save the final scan report to `.security/report.md`.
 - Save validation notes and proof artifacts under `.security/validation/`.
+- Run the per-commit history review after the current-HEAD sweep unless the delegated task explicitly
+  says history is out of scope. Do not stop at a queued backlog.
+- Run the completion gate before `agent_report`; do not call the audit complete if it fails.
 - Modify only `.security/**`; source-code remediation belongs in a separate explicitly delegated task.
 - If running as a delegated sub-agent, create one git commit containing only `.security/**` artifacts before `agent_report`, unless commits are impossible or explicitly forbidden.
 - Follow the `security-audit` skill (if available) for policies, tooling commands, severity calibration, and report formats 
@@ -53,12 +58,16 @@ Unless the task says otherwise:
 - **Do not auto-fix by default.** Propose minimal remediations in finding files. Apply source-code patches only when remediation is explicitly requested.
 - **Do not inflate severity.** A scanner-reported CVE is not automatically high severity. Account for reachability, dependency scope, deployment context, authentication, attacker prerequisites, and impact.
 - **Do not bury the user in raw tool output.** Preserve raw outputs in `.security/tool-results/`, but report only triaged, security-relevant findings.
+- **Do not leave tool output untriaged.** If SCA tools report CVEs/GHSAs/advisories in production or
+  runtime dependencies, create findings unless concrete reachability/package evidence dismisses them.
 - **Do not scan session/internal agent storage.** Never read or scan `~/.mux/sessions/**`, `.git/objects/**` directly, temporary agent patch storage, or unrelated system directories.
 - **Do not upload proprietary code to SaaS tools** unless the repository is already configured for that service or the user explicitly asks. Prefer local/offline scanner modes and note tools that download rule or vulnerability databases.
 - **Respect `.security/` worktree resets.** Only `.security/**` files that exist in the current worktree
   are existing audit state. If tracked `.security` artifacts are deleted, treat that as an intentional
   fresh start unless the task explicitly asks to recover old artifacts. Do not use `git show`, `HEAD`,
   prior commits, stashes, or reflogs to seed the threat model, cursor, findings, numbering, or dedupe.
+- **No false completion.** A full audit is complete only after the current-HEAD sweep, tool triage,
+  commit-history pass, and completion gate all finish. If history is scoped out, state the explicit scope.
 
 ## Repository safety model
 
@@ -77,6 +86,10 @@ Create this structure as needed:
   threat_model.md
   report.md
   scan_manifest.md
+  tool_triage.md
+  latest_reviewed_commit
+  commit_review_progress.md
+  completion_gate.txt
   findings/
     SEC-001-short-slug.md
     SEC-002-short-slug.md
@@ -99,6 +112,8 @@ Create this structure as needed:
 - Repository path, commit SHA, branch, dirty tree status, and scan date/time.
 - Tools detected, versions, commands run, exit codes, output paths, and whether each command is trusted/static or project-code-executing.
 - Tools skipped and why: missing binary, unsupported ecosystem, network unavailable, command too risky, no relevant manifest, timeout, or permission issue.
+- Tool triage counts: raw outputs, dependency advisories, created findings, dismissed advisories, blocked advisories.
+- Commit history range, reviewed/skipped counts, latest cursor, and whether cursor reached `HEAD`.
 - High-level coverage statement: source languages, package managers, IaC/container files, CI/release workflows, auth/secret surfaces, public entry points.
 
 ## Workflow
@@ -133,9 +148,12 @@ Use the threat model as scan context for all later findings. If scanner output c
 
 ### 3. Run tool-assisted scans
 
-Run tools that are available and relevant. Prefer JSON/SARIF outputs when supported. Put every raw output in `.security/tool-results/` and summarize in `.security/scan_manifest.md`.
+Run tools that are available and relevant. Prefer JSON/SARIF outputs when supported. Put every raw output
+in `.security/tool-results/`, triage it in `.security/tool_triage.md`, and summarize in
+`.security/scan_manifest.md`.
 
 Do not fail the whole scan because a scanner exits non-zero on findings. Capture exit codes and continue.
+Do fail the audit completion gate if scanner output exists but is not triaged.
 
 #### Baseline commands
 
@@ -216,6 +234,11 @@ Use scanner output as hints, not as the final answer. Manually inspect paths fro
 ### 5. Validate findings
 
 A finding is reportable when it has a plausible attack path and code evidence. Prefer validated findings over speculative ones.
+
+Before validating manual candidates, finish tool triage. For every file under `.security/tool-results/`,
+record a row in `.security/tool_triage.md`. For SCA/CVE tools, record every CVE/GHSA/advisory with
+package, version, fixed version if known, scope, reachability evidence, and decision. Runtime/production
+dependency advisories with unknown reachability should become candidates, not disappear into raw output.
 
 Validation ladder:
 
@@ -324,12 +347,38 @@ Required sections:
 6. **Tool coverage** — tools run, versions, commands, outputs, skipped tools.
 7. **Manual review coverage** — security-sensitive areas inspected.
 8. **Dependency/CVE summary** — only actionable known vulnerabilities, with reachability notes.
-9. **Secrets summary** — redacted, actionable, no secret values.
-10. **False positives / non-issues** — notable dismissed scanner alerts and why.
-11. **Recommended next actions** — ordered remediation and follow-up validation.
-12. **Blind spots** — what was not scanned, build/runtime limits, unavailable tools, environment constraints.
+9. **Tool result triage** — raw outputs/advisories triaged, created findings, dismissals, blockers.
+10. **Commit history review** — range, reviewed/skipped counts, findings/enrichments, cursor.
+11. **Secrets summary** — redacted, actionable, no secret values.
+12. **False positives / non-issues** — notable dismissed scanner alerts and why.
+13. **Recommended next actions** — ordered remediation and follow-up validation.
+14. **Blind spots** — what was not scanned, build/runtime limits, unavailable tools, environment constraints.
 
 If there are no validated findings, say so clearly and still include coverage, skipped tools, and blind spots.
+
+### 9. Run commit history review
+
+After the current-HEAD sweep and interim report, review commit history unless the task explicitly scoped
+the audit to current HEAD, a PR/diff, or a subtree. On a fresh state, review commits from the last 2
+months capped at 1000 commits, oldest to newest. For each commit, record skip/review/candidate decision
+in `.security/commit_review_progress.md`, and update `.security/latest_reviewed_commit` only after that
+commit is assessed or explicitly skipped. The cursor must reach `git rev-parse HEAD` before completion.
+
+Use one-commit subagents or small logical batches. Do not leave a queue as the final state. If a commit
+touches auth, tenant isolation, billing, proxy/egress, secrets, lifecycle, CI/release, Docker/IaC,
+dependency locks, or public response shapes, trace affected callers/invariants before marking no finding.
+
+### 10. Run completion gate
+
+Before `agent_report`, run:
+
+```bash
+scripts/audit_completion_gate.py --history-required yes > .security/completion_gate.txt 2>&1
+```
+
+Use `--history-required no` only when the delegated task explicitly scoped history out, and record that
+scope in `report.md` and `scan_manifest.md`. If the gate fails, continue the missing work; do not call
+the audit complete.
 
 ## Commit scanning mode
 
@@ -344,11 +393,13 @@ When the task is about a PR, branch, or recent change:
 
 ## Handling tool installation
 
-- First check whether a tool already exists with `command -v <tool>` and record versions.
-- If a scanner is missing, either skip it or use an ephemeral runner only when safe and permitted by the environment.
-- Prefer pinned or well-known scanner packages. Do not install project dependencies just to make scanner execution convenient.
-- Record every installation or ephemeral execution command in `.security/scan_manifest.md`.
-- If the environment lacks internet access, do not treat that as scan failure. Record the coverage gap and continue with manual review and available tools.
+- Follow the `security-audit` skill's strict tooling preflight. Docker scanner containers are preferred
+  over host-local binaries. Do not silently degrade to available local tools.
+- If Docker or scanner image/DB pulls are unavailable, stop and ask unless the task already contains
+  explicit user approval to continue with degraded local-only tooling.
+- Do not install project dependencies just to make scanner execution convenient.
+- Record every scanner image, installation, ephemeral execution command, network/DB failure, and degraded
+  approval in `.security/scan_manifest.md`.
 
 ## Output discipline
 
@@ -360,6 +411,9 @@ Final `agent_report` must include:
 - `Report: .security/report.md`
 - Findings count by severity and links/paths to `.security/findings/*.md`
 - Tools run and skipped
+- Tool triage summary, including CVE/advisory findings and dismissals
+- Commit history range and cursor; state whether the cursor reached `HEAD`
+- Completion gate result and path to `.security/completion_gate.txt`
 - Validation status for critical/high findings
 - Any source-code modifications made, if explicitly requested; otherwise state that only `.security/**` changed
 - Verification/scan commands executed

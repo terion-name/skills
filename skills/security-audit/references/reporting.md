@@ -1,7 +1,8 @@
 # Validation, severity, chaining, and reporting
 
-This covers Steps 4–7: how to validate a candidate, how to rate it, how to chain findings, and the exact
-output formats. The target shapes are `assets/example_finding.md` (per finding) and the summary table below.
+This covers Steps 4–8: how to triage scanner output, validate a candidate, rate it, chain findings,
+and pass the completion gate. The target shapes are `assets/example_finding.md` (per finding) and the
+summary table below.
 
 ---
 
@@ -179,15 +180,55 @@ the child commit and current/future state.
 
 ## Tool-derived findings
 
-Raw scanner output is evidence, not a report. Store it under `.security/tool-results/`, then triage the
-hits against the actual code. Any actionable tool-derived issue that survives code/dataflow confirmation
-and validation becomes a standard `.security/findings/SEC-NNN-<slug>.md` file using the normal per-finding
-format above. Set `Detected by` to the tool name (for example `semgrep`, `trivy`, or `gitleaks`) and link
-the raw output path in `# Evidence` or `# Validation`.
+Raw scanner output is evidence, not a report, and it cannot remain unprocessed. Store raw output under
+`.security/tool-results/`, then write `.security/tool_triage.md` before final reporting. Any actionable
+tool-derived issue that survives code/dataflow confirmation and validation becomes a standard
+`.security/findings/SEC-NNN-<slug>.md` file using the normal per-finding format above. Set `Detected by`
+to the tool name (for example `semgrep`, `trivy`, `grype`, `osv-scanner`, `dependency-check`, or
+`gitleaks`) and link the raw output path in `# Evidence` or `# Validation`.
+
+Tool triage must include:
+
+- one row per raw output file under `.security/tool-results/`, including scanner failures and partial
+  outputs
+- one row per dependency advisory from SCA tools (`CVE-*`, `GHSA-*`, npm/pypi/rustsec/go advisory IDs)
+- decision: `finding:<SEC-NNN>`, `candidate`, `dismissed:<reason>`, or `blocked:<reason>`
+- evidence for dismissed dependency advisories: dev/test-only scope, not installed, not packaged, not
+  reachable, vulnerable feature unused, scanner false positive, fixed by later lockfile, or environment
+  prevented validation
+
+Do not dismiss a dependency CVE just because "reachability unknown". For production/runtime dependencies,
+unknown reachability is a candidate until you trace imports/callers/package usage enough to disprove it
+or rank it as `unvalidated`/`likely`. If a fix version exists and the vulnerable package ships in runtime
+artifacts, create a finding unless there is concrete evidence that the vulnerable code is unreachable or
+the package is not deployed.
 
 Do not write Markdown summaries under `.security/tool-results/`. Dismissed tool hits belong in
 `.security/report.md` under "Considered and dismissed" when they are relevant to coverage; otherwise the
-raw scanner output and `scan_manifest.md` are enough.
+raw scanner output, `.security/tool_triage.md`, and `scan_manifest.md` are enough.
+
+`.security/tool_triage.md` format:
+
+```
+# Tool result triage — <repo> @ <commit> — <date>
+
+## Raw outputs
+| Output | Tool | Status | Decision | Notes |
+|--------|------|--------|----------|-------|
+| tool-results/trivy.sarif | trivy | parsed | findings: SEC-014, dismissed: 3 | ... |
+| tool-results/dependency-check/report.json | dependency-check | failed | blocked:nvd-429 | retry needed |
+
+## Dependency advisories
+| Advisory | Package | Version | Fixed version | Scope | Tool(s) | Reachability evidence | Decision |
+|----------|---------|---------|---------------|-------|---------|-----------------------|----------|
+| CVE-2026-... | pkg | 1.2.3 | 1.2.4 | runtime | trivy, grype | imported by api/foo.ts; live request path | finding:SEC-014 |
+| GHSA-... | dev-pkg | 4.5.6 | 4.5.7 | dev-only | osv | package not in production build image | dismissed:dev-only |
+
+## Other tool hits
+| Tool | Rule/id | Location | Decision | Reason |
+|------|---------|----------|----------|--------|
+| semgrep | javascript.express.security.audit... | src/x.ts:10 | finding:SEC-015 | source reaches sink |
+```
 
 ---
 
@@ -217,7 +258,7 @@ raw scanner output and `scan_manifest.md` are enough.
 ...
 
 ## Dependency / CVE summary
-- <only actionable known-vuln deps, with reachability notes>
+- <actionable known-vuln deps with linked findings, plus count of dismissed/blocked advisories; link to tool_triage.md>
 
 ## Standards / framework coverage
 - <ASVS/API/CWE/NIST/SLSA/Scorecard mappings used, and notable unmapped areas>
@@ -231,6 +272,10 @@ raw scanner output and `scan_manifest.md` are enough.
 ## Considered and dismissed (false positives)
 - <candidate> — why it's not exploitable.
 
+## Tool result triage
+- Raw output files triaged: <n>/<n>. Advisories triaged: <n>/<n>. Link to tool_triage.md.
+- Findings created from tools: <SEC-NNN...>. Blocked tool validation: <items>.
+
 ## Fixed findings
 - <SEC-NNN> — <title>, fixed in <commit/date if known>. Link to fixed/SEC-NNN-...md.
 
@@ -242,6 +287,7 @@ raw scanner output and `scan_manifest.md` are enough.
 ## Coverage
 - Scanned: <surfaces / dirs / diff>. Languages: <...>. See scan_manifest.md for tools + commands.
 - Tooling preflight: <containerized via Docker | user-approved degraded local-only | blocked>, link to tooling_preflight.md.
+- Tool triage: <complete | incomplete>, link to tool_triage.md.
 - Manual review covered: <security-sensitive areas inspected>.
 - DFD/source-sink coverage: <flows, sources, sinks, sanitizers/guards, business invariants reviewed>.
 - Cloud/IaC identity paths: <workload/service account/OIDC -> cloud role -> API actions -> assets reviewed>.
@@ -252,6 +298,10 @@ raw scanner output and `scan_manifest.md` are enough.
 
 ## Blindspots
 - <env gaps, tools that couldn't run, paths not dynamically validated>
+
+## Completion gate
+- Command: `scripts/audit_completion_gate.py --history-required <yes|no>`
+- Result: <pass|fail>. Output: completion_gate.txt.
 ```
 
 If there are no findings, say so clearly and still include coverage, skipped tools, and blindspots.
@@ -282,6 +332,12 @@ If there are no findings, say so clearly and still include coverage, skipped too
 - <tool> — <not required for detected ecosystem | container image unavailable | DB/rules unavailable |
   user-approved degraded local-only missing binary | unsupported ecosystem | too risky | timeout>
 
+## Tool triage
+- Tool triage artifact: .security/tool_triage.md
+- Raw output files: <n total, n triaged>
+- Dependency advisories: <n total, n findings, n dismissed, n blocked>
+- Tool-derived findings: <SEC-NNN...>
+
 ## Coverage statement
 - Languages / package managers: <...>
 - IaC / container / CI files: <...>
@@ -292,6 +348,7 @@ If there are no findings, say so clearly and still include coverage, skipped too
 - Supply-chain evidence dossier: <SBOM/provenance/attestation/signing/Scorecard-style checks/KEV/VEX>.
 - Cloud/IaC identity paths: <workload identities, OIDC principals, roles, effective permissions, assets>.
 - Commit history review: <range, count reviewed/skipped, latest cursor, progress file path>.
+- Completion gate: <pass/fail, command, output path>.
 - Any project-code-executing commands run (and why): <... or "none">
 ```
 
