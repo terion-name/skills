@@ -356,15 +356,21 @@ process oldest to newest. Do not recover a deleted cursor from git history.
 
 Actively use subagents and keep durable progress:
 
-- Write and update `.security/commit_review_progress.md` with the queue, current batch, completed/skipped
-  counts, and current cursor so a resumed agent can continue without relying on chat context.
+- Before reviewing, write `.security/commit_review_start_cursor`, `.security/commit_review_target_head`,
+  and `.security/commit_review_queue.txt` with the exact ordered queue. Then update
+  `.security/commit_review_progress.md`, `.security/commit_review_ledger.jsonl`, and
+  `.security/commit-reviews/<sha>.md` as each commit is actually assessed so a resumed agent can continue
+  without relying on chat context.
 - Spawn commit-review subagents in background batches. Scope each subagent to one commit unless a tiny
   run of related commits is safer as a small batch.
 - For each commit, first decide whether it is obviously non-functional. Skip docs-only, formatting-only,
   and purely visual changes when they cannot affect runtime behavior, but record the skip reason.
 - For functional commits, review the diff and trace directly affected logic: call paths, trust boundaries,
   downstream consumers, config/defaults, data/control flow, and security-sensitive invariants.
-- After each commit is assessed or skipped, write that SHA to `.security/latest_reviewed_commit`.
+- After each commit is assessed or skipped, append a valid JSONL ledger entry, write its per-commit review
+  artifact, and only then write that SHA to `.security/latest_reviewed_commit`. Never bulk-advance the
+  cursor. If you cannot finish the queue, leave the cursor at the last actually reviewed commit and report
+  history review in progress.
 
 Use the same validation, severity, chaining, and finding format as the current-HEAD scan. If a commit
 introduced an issue, set `Commit: <introducing sha>` in the finding metadata. Before writing, reconcile
@@ -389,6 +395,8 @@ HEAD, a diff/PR, or a subtree and the report/manifest state why history is out o
 If the gate fails, do **not** report the audit as complete. Fix the missing work:
 
 - If history is incomplete, continue Step 7 until `.security/latest_reviewed_commit` equals `git rev-parse HEAD`.
+- If the history ledger/queue/artifacts are incomplete, write the missing per-commit entries by actually
+  reviewing those commits; do not synthesize ledger rows to satisfy the gate.
 - If tool outputs are untriaged, finish `.security/tool_triage.md`; create findings for actionable or
   not-disproven production CVEs, and record evidence-backed dismissals for non-actionable advisories.
 - If a required artifact is missing, write it.
@@ -409,7 +417,12 @@ with the Security Officer agent" below):
 ├── threat_model.md            # persistent; created once, refreshed as architecture changes
 ├── tooling_preflight.md        # Docker/tool availability gate and required scanner set
 ├── latest_reviewed_commit     # latest commit SHA assessed by the incremental commit-review flow
+├── commit_review_start_cursor # cursor before this history pass, or FIRST_RUN
+├── commit_review_target_head  # HEAD the queue is expected to reach
+├── commit_review_queue.txt    # exact ordered commits for this pass, one SHA per line
 ├── commit_review_progress.md  # in-flight commit queue/progress so long reviews can resume
+├── commit_review_ledger.jsonl # one machine-checkable review decision per queued commit
+├── commit-reviews/            # one auditable per-commit review artifact per queued commit
 ├── report.md                  # latest scan summary (exec summary + severity table + chains + coverage)
 ├── scan_manifest.md           # tools run/skipped, versions, commands, exit codes, coverage statement
 ├── tool_triage.md             # every tool output/advisory mapped to finding/dismissal/blocker

@@ -26,16 +26,25 @@ git log --since="2 months ago" --format=%H --reverse | tail -n 1000
 git rev-list --reverse <latest-reviewed-sha>..HEAD
 ```
 
-Before starting, write `.security/commit_review_progress.md` with the range, total count, current batch,
-completed/skipped counts, and latest cursor. Update it after each commit or subagent batch so a resumed
+Before starting, write the machine-checkable queue state:
+
+- `.security/commit_review_start_cursor` — previous cursor SHA, or `FIRST_RUN` for a fresh state.
+- `.security/commit_review_target_head` — `git rev-parse HEAD` at queue creation time.
+- `.security/commit_review_queue.txt` — exact ordered commit queue, one SHA per line.
+- `.security/commit_review_progress.md` — human progress log with total count, current batch,
+  completed/skipped counts, and latest cursor.
+- `.security/commit_review_ledger.jsonl` — one JSON object per assessed commit.
+- `.security/commit-reviews/<sha>.md` — one auditable review note per commit.
+
+Update progress, ledger, and the per-commit artifact after each commit or subagent batch so a resumed
 agent can continue without relying on conversation context. Record enough detail that a reviewer can see
 whether a commit was truly investigated or merely skimmed: commit SHA, subject, changed paths, decision,
 invariants checked, related symbols/callers traced, candidate count, and cursor after the decision.
 
 The history pass is complete only when every queued commit has a recorded decision and
-`.security/latest_reviewed_commit` equals the audited `HEAD`. A written queue, partial progress file, or
-"remaining commits" note is not completion. If the queue is large, keep processing in waves until it is
-empty; do not stop after the current-HEAD sweep or after creating the queue.
+`.security/latest_reviewed_commit` equals the audited `HEAD`. A written queue, partial progress file,
+bulk cursor update, or "remaining commits" note is not completion. If the queue is large, keep processing
+in waves until it is empty; do not stop after the current-HEAD sweep or after creating the queue.
 
 ## Commit triage
 
@@ -189,7 +198,37 @@ commit, update `.security/latest_reviewed_commit` to that SHA and update `.secur
 
 Never advance the cursor past a commit that has not been assessed or explicitly skipped with a valid
 non-functional reason. Never report "audit complete" while the progress file contains pending commits.
-Before the final summary, the completion gate will verify that the cursor reached `HEAD`.
+Before the final summary, the completion gate will verify that the queue matches git, every queued commit
+has a valid ledger entry and review artifact, and the cursor reached `HEAD`.
+
+Ledger entry schema (JSONL, one line per commit):
+
+```json
+{
+  "schema_version": 1,
+  "commit": "<sha>",
+  "status": "skip | reviewed-no-finding | candidate",
+  "subject": "<commit subject>",
+  "review_artifact": "commit-reviews/<sha>.md",
+  "changed_paths": ["path"],
+  "elapsed_seconds": 123,
+  "parent_child_diff_checked": true,
+  "current_head_trace_checked": true,
+  "files_inspected": ["path"],
+  "caller_traces": ["symbol -> caller/path"],
+  "invariants_checked": ["auth/tenant isolation held because ..."],
+  "probes": ["auth: not applicable because ...", "infra: held because ..."],
+  "promotion_gate_result": "none; no fail-open/config exposure/etc.",
+  "candidates": []
+}
+```
+
+For `skip`, include `skip_reason`, `changed_paths`, `elapsed_seconds`, and a short
+`commit-reviews/<sha>.md` note proving the commit is truly non-functional. For functional reviews, the
+artifact must contain the parent/child diff summary, files inspected, caller/invariant tracing, probe
+checklist, promotion-gate result, and candidate/dismissal rationale. Do not fabricate elapsed time or
+subagent work. If the run cannot finish the queue in the current session, leave the cursor at the last
+actually reviewed commit and report "history review in progress", not complete.
 
 Commit subagent prompt shape:
 

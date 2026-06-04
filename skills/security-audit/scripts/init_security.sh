@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="${1:-.}"
 SEC_DIR="$ROOT/.security"
 
-mkdir -p "$SEC_DIR/findings" "$SEC_DIR/fixed" "$SEC_DIR/tool-results" "$SEC_DIR/validation"
+mkdir -p "$SEC_DIR/findings" "$SEC_DIR/fixed" "$SEC_DIR/tool-results" "$SEC_DIR/validation" "$SEC_DIR/commit-reviews"
 
 # .gitignore inside .security/ so noisy raw tool output isn't committed,
 # but threat model, findings, fixed findings, manifest, tool triage, completion gate, and summary report are.
@@ -27,6 +27,8 @@ fi
 echo "[init] .security/ ready at: $SEC_DIR"
 echo "       latest_reviewed_commit -> cursor written after each commit-history review step"
 echo "       commit_review_progress.md -> in-flight commit queue/progress log"
+echo "       commit_review_start_cursor + commit_review_target_head + commit_review_queue.txt -> exact history range"
+echo "       commit_review_ledger.jsonl + commit-reviews/ -> one auditable decision per queued commit"
 echo "       findings/     -> one finding per file (SEC-NNN-slug.md), chronological IDs"
 echo "       fixed/        -> remediated findings moved here, keeping original SEC-NNN IDs"
 echo "       tool-results/ -> raw scanner output only (gitignored)"

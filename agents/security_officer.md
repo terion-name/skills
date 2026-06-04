@@ -88,7 +88,12 @@ Create this structure as needed:
   scan_manifest.md
   tool_triage.md
   latest_reviewed_commit
+  commit_review_start_cursor
+  commit_review_target_head
+  commit_review_queue.txt
   commit_review_progress.md
+  commit_review_ledger.jsonl
+  commit-reviews/
   completion_gate.txt
   findings/
     SEC-001-short-slug.md
@@ -113,7 +118,8 @@ Create this structure as needed:
 - Tools detected, versions, commands run, exit codes, output paths, and whether each command is trusted/static or project-code-executing.
 - Tools skipped and why: missing binary, unsupported ecosystem, network unavailable, command too risky, no relevant manifest, timeout, or permission issue.
 - Tool triage counts: raw outputs, dependency advisories, created findings, dismissed advisories, blocked advisories.
-- Commit history range, reviewed/skipped counts, latest cursor, and whether cursor reached `HEAD`.
+- Commit history range, reviewed/skipped counts, queue count, ledger count, per-commit artifact count,
+  latest cursor, and whether cursor reached `HEAD`.
 - High-level coverage statement: source languages, package managers, IaC/container files, CI/release workflows, auth/secret surfaces, public entry points.
 
 ## Workflow
@@ -360,13 +366,19 @@ If there are no validated findings, say so clearly and still include coverage, s
 
 After the current-HEAD sweep and interim report, review commit history unless the task explicitly scoped
 the audit to current HEAD, a PR/diff, or a subtree. On a fresh state, review commits from the last 2
-months capped at 1000 commits, oldest to newest. For each commit, record skip/review/candidate decision
-in `.security/commit_review_progress.md`, and update `.security/latest_reviewed_commit` only after that
-commit is assessed or explicitly skipped. The cursor must reach `git rev-parse HEAD` before completion.
+months capped at 1000 commits, oldest to newest. Before review, write
+`.security/commit_review_start_cursor`, `.security/commit_review_target_head`, and
+`.security/commit_review_queue.txt`. For each commit, write a detailed
+`.security/commit-reviews/<sha>.md` note, append a JSON object to `.security/commit_review_ledger.jsonl`,
+record skip/review/candidate decision in `.security/commit_review_progress.md`, and update
+`.security/latest_reviewed_commit` only after that commit is assessed or explicitly skipped. The cursor
+must reach `git rev-parse HEAD` before completion.
 
 Use one-commit subagents or small logical batches. Do not leave a queue as the final state. If a commit
 touches auth, tenant isolation, billing, proxy/egress, secrets, lifecycle, CI/release, Docker/IaC,
 dependency locks, or public response shapes, trace affected callers/invariants before marking no finding.
+Do not bulk-generate ledger rows. If the run cannot finish, leave the cursor at the last actually
+reviewed commit and report history review in progress.
 
 ### 10. Run completion gate
 
