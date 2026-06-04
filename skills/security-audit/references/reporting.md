@@ -8,23 +8,26 @@ summary table below.
 
 ## Validation
 
-Validation is what makes this more than a scanner: a candidate becomes a *finding* only when you've
-shown it's real. This is the orchestrator's job because it needs the whole-repo picture.
+Validation is what makes this more than a scanner: a candidate becomes a *finding* only when evidence
+shows it's real. The orchestrator owns the final judgment because it has the whole-repo picture, but it
+does not gather validation evidence in the main context. It delegates reproduction, targeted code-review
+proof, negative-evidence checks, and patch-risk analysis to validation sub-agents, then accepts, rejects,
+or sends them back for a tighter pass.
 
-For each candidate (scariest first), pick the strongest validation you can:
+For each candidate (scariest first), request the strongest validation available:
 
-**Tier 1 — dynamic reproduction (preferred).** Build the minimal PoC that proves the source reaches the
-sink, inside the sandbox. Examples: send a request whose payload reaches the SQL string / shell / file
-path; craft a tar whose entry escapes the extraction dir; present a forged token that the auth check
-accepts; trigger the overflow under a sanitizer. Capture the command, stdout/stderr, exit code, and any
-artifact (a written file, a crash, a leaked value). This is the `# Validation` evidence block in the
-example finding.
+**Tier 1 — dynamic reproduction (preferred).** A validation sub-agent builds the minimal PoC that proves
+the source reaches the sink, inside the sandbox. Examples: send a request whose payload reaches the SQL
+string / shell / file path; craft a tar whose entry escapes the extraction dir; present a forged token
+that the auth check accepts; trigger the overflow under a sanitizer. Capture the command, stdout/stderr,
+exit code, and any artifact (a written file, a crash, a leaked value). This is the `# Validation`
+evidence block in the example finding.
 
 **Tier 2 — targeted code-review proof.** When dynamic repro isn't possible (declarative/IaC bug, missing
-toolchain, network blocked, or repro would be destructive), trace the exact code path with `path:line`
-evidence at every hop and explain why the guard is absent or bypassable. Explicitly record *why* dynamic
-validation was skipped (e.g. "ansible not installable, proxy 403; validated the extraction primitive
-directly instead") — the example finding does exactly this.
+toolchain, network blocked, or repro would be destructive), a validation sub-agent traces the exact code
+path with `path:line` evidence at every hop and explains why the guard is absent or bypassable.
+Explicitly record *why* dynamic validation was skipped (e.g. "ansible not installable, proxy 403;
+validated the extraction primitive directly instead") — the example finding does exactly this.
 
 **Tier 3 — unvalidated.** You can't reproduce it and the code path is ambiguous. Keep it, but label it
 `unvalidated` and lower its confidence. Don't inflate severity on unvalidated findings.
@@ -181,11 +184,13 @@ the child commit and current/future state.
 ## Tool-derived findings
 
 Raw scanner output is evidence, not a report, and it cannot remain unprocessed. Store raw output under
-`.security/tool-results/`, then write `.security/tool_triage.md` before final reporting. Any actionable
-tool-derived issue that survives code/dataflow confirmation and validation becomes a standard
-`.security/findings/SEC-NNN-<slug>.md` file using the normal per-finding format above. Set `Detected by`
-to the tool name (for example `semgrep`, `trivy`, `grype`, `osv-scanner`, `dependency-check`, or
-`gitleaks`) and link the raw output path in `# Evidence` or `# Validation`.
+`.security/tool-results/`, then delegate parsing and triage to tool-triage sub-agents before final
+reporting. The orchestrator must not inspect raw scanner JSON/SARIF/CVE output directly except for
+metadata/count checks. Any actionable tool-derived issue that survives code/dataflow confirmation and
+validation becomes a standard `.security/findings/SEC-NNN-<slug>.md` file using the normal per-finding
+format above. Set `Detected by` to the tool name (for example `semgrep`, `trivy`, `grype`,
+`osv-scanner`, `dependency-check`, or `gitleaks`) and link the raw output path in `# Evidence` or
+`# Validation`.
 
 Tool triage must include:
 
@@ -289,6 +294,7 @@ raw scanner output, `.security/tool_triage.md`, and `scan_manifest.md` are enoug
 - Scanned: <surfaces / dirs / diff>. Languages: <...>. See scan_manifest.md for tools + commands.
 - Tooling preflight: <containerized via Docker | user-approved degraded local-only | blocked>, link to tooling_preflight.md.
 - Tool triage: <complete | incomplete>, link to tool_triage.md.
+- Delegation: <phases delegated, subagent count>, link to delegation_log.jsonl.
 - Manual review covered: <security-sensitive areas inspected>.
 - DFD/source-sink coverage: <flows, sources, sinks, sanitizers/guards, business invariants reviewed>.
 - Cloud/IaC identity paths: <workload/service account/OIDC -> cloud role -> API actions -> assets reviewed>.
@@ -338,6 +344,11 @@ If there are no findings, say so clearly and still include coverage, skipped too
 - Raw output files: <n total, n triaged>
 - Dependency advisories: <n total, n findings, n dismissed, n blocked>
 - Tool-derived findings: <SEC-NNN...>
+
+## Delegation
+- Delegation log: .security/delegation_log.jsonl
+- Phases delegated: <threat-model, scan, tool-triage, validation, finding-draft, report-draft, commit-review>
+- Subagent tasks completed/blocked/rerun-requested: <counts>
 
 ## Coverage statement
 - Languages / package managers: <...>

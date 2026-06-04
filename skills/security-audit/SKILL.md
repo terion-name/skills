@@ -110,24 +110,43 @@ sync — if you change the `.security/` layout or status vocab in one, change it
 These are workflow constraints. Your edit/read tools remain available, but treat them as off-limits
 except where explicitly allowed below — the point is to preserve your context for orchestration.
 
-- **Delegate investigation.** Do not read broad swaths of the repo yourself. Spawn `explore` sub-agents
-  with narrow prompts (one surface / directory / question each). Trust their reports as authoritative
-  for repo facts (paths, symbols, callsites, control flow); re-check only if a report is ambiguous or
-  contradicts other evidence.
-- **Delegate scanning.** Spawn one sub-agent per partition to run the relevant tools and do semantic
-  review against the policy files. Run partitions **in parallel** (`run_in_background: true`, then
-  `task_await`) — security scanning is embarrassingly parallel across surfaces.
+- **Delegate all audit work.** The main agent is the orchestrator only. It must not directly inspect
+  product code, parse raw scanner output, perform dependency/CVE reachability analysis, run validation
+  PoCs, trace call paths, decide whether a tool hit is real from raw evidence, or draft code-evidence
+  sections from its own file reads. Every investigative or analytical task goes to a sub-agent.
+- **Main-context allowlist.** In the main context, do only orchestration: read this skill and reference
+  docs; read/write `.security` control artifacts and sub-agent reports; run `git` commands to determine
+  HEAD/base/commit queues; run `scripts/init_security.sh`, `scripts/tooling_preflight.py`, and
+  `scripts/audit_completion_gate.py`; create directories; assign final `SEC-NNN` IDs; merge sub-agent
+  outputs; run the completion gate; request reruns when evidence is thin. Reading filenames/counts is
+  fine. Reading product files or raw `.security/tool-results/*` content for analysis is not.
+- **Log delegation.** Every sub-agent task must append a JSONL record to `.security/delegation_log.jsonl`
+  with `phase`, `subagent_id` or worker name, scoped task, status, and output artifact. The completion
+  gate requires this log for the expected audit phases.
+- **No direct fallback.** If sub-agents are unavailable or fail, stop and report that the audit is blocked
+  or ask the user whether to run an explicitly degraded single-agent audit. Do not silently continue in
+  the main context.
+- **Delegate investigation.** Spawn `explore` sub-agents with narrow prompts (one surface / directory /
+  question each). Treat their reports as the source of repo facts (paths, symbols, callsites, control
+  flow); if a report is ambiguous or contradicts other evidence, send a follow-up sub-agent instead of
+  opening files yourself.
+- **Delegate scanning and tool triage.** Spawn sub-agents to run scanners and separate sub-agents to
+  triage raw outputs/advisories. The main agent may check that tool output files exist and that
+  `tool_triage.md` accounts for them, but must not parse raw SARIF/JSON/CVE output itself.
 - **Delegate commit review.** After the current-HEAD sweep, immediately continue into commit-review
   subagents for the incremental commit flow. Prefer many one-commit subagents over broad queue workers,
   and require each no-finding result to include the invariants, callers, and future touches it checked.
   Broken-invariant notes such as fail-open guards, billing drift, exposed internals, or unsafe config
   combinations must be promoted to candidates for validation. Keep the queue, cursor, progress log,
-  validation, dedupe, and final artifacts with the orchestrator.
-- **You own validation and severity.** Reproduction judgment, severity calibration, and exploit chaining
-  stay with you (the orchestrator), because they require the whole-repo picture the sub-agents lack.
-  You may run targeted `bash` here (run a tool, execute a PoC in the sandbox, build the project).
-- **`bash` is for orchestration + validation only:** running scanners, reproducing a finding, building,
-  `git`/`gh` for diff/commit context. Not for broad file reading or manual code spelunking — delegate that.
+  dedupe, and final artifacts with the orchestrator.
+- **Delegate validation evidence; own final judgment.** The orchestrator owns the final validation
+  status, severity calibration, and exploit-chain decision, but gathers evidence only through validation
+  sub-agents. If reproduction or targeted code proof is needed, spawn a validation sub-agent with the
+  exact question. The main agent reviews the returned evidence, asks for reruns if weak, and then makes
+  the final decision.
+- **`bash` is for orchestration only in the main context:** `git` queue/base commands, scaffolding,
+  preflight, completion gate, counts, and artifact moves. Do not run scanners, builds, tests, PoCs,
+  `rg`/`sed`/`cat`/`nl` over product code, or raw tool-result parsing in main context.
 - **Do not patch the codebase as part of the scan.** Like Codex, you *propose* patches as diffs inside
   findings; you do not apply them. If the user explicitly asks you to fix afterward, that's a separate
   step (and a good fit for the `orchestrate` skill).
@@ -238,8 +257,30 @@ Sub-agents return **candidate findings** (suspected, not yet validated), each wi
 (`path:line`), the vulnerability class, a one-line why, and the data/control flow from source to sink.
 They do **not** assign final severity — that's your job after validation and chaining.
 
+After scanner sub-agents finish, spawn dedicated **tool-triage sub-agents** for raw outputs/advisory sets
+before validation. Do not parse SARIF/JSON/CVE output in the main context. The orchestrator only assigns
+output groups to workers, receives their triage rows, checks coverage/counts, and asks for reruns when a
+tool file or advisory ID is missing.
+
 ### Scan task brief (Orchestrator → scan sub-agent)
 
+```
+
+### Tool-triage task brief (Orchestrator → tool-triage sub-agent)
+
+```
+- Task: Triage security-audit tool outputs for <tool/output group>.
+- Inputs: <raw .security/tool-results paths>, threat model path, relevant package/runtime context from scan sub-agent reports.
+- Do:
+  1. Parse only the assigned raw tool outputs.
+  2. For each raw output file, produce a Raw outputs row for .security/tool_triage.md.
+  3. For each SCA advisory/CVE/GHSA/ecosystem advisory, determine package, version, fixed version,
+     dependency scope, runtime/deployment evidence, and decision.
+  4. Promote production/runtime advisories with reachable or not-disproven reachability to candidate findings.
+  5. Dismiss only with concrete evidence: dev-only, test-only, not installed, not packaged, unreachable,
+     fixed by current lockfile, scanner false positive, or validation blocked.
+- Report back: tool_triage rows plus candidate findings. Do not assign final SEC IDs or final severity.
+- Constraints: read-only; do not modify code; do not summarize raw output without per-file/advisory decisions.
 ```
 - Task: Security-audit partition <name> for vulnerabilities.
 - Surface / scope: <files, directories, or attack surface this partition covers>
@@ -276,33 +317,44 @@ They do **not** assign final severity — that's your job after validation and c
 This is the step that separates a real finding from scanner noise — Codex's core value-add. Read the
 "Validation" and "Tool-derived findings" sections of `references/reporting.md`.
 
-First, finish tool triage. `.security/tool_triage.md` is mandatory whenever `.security/tool-results/`
-contains output. For each scanner output file, record whether it produced findings, was dismissed, or
-failed. For each dependency advisory from Trivy/Grype/OSV/Dependency-Check/dep-scan/npm/pnpm/yarn/etc.,
-record the advisory ID, package, installed version, fixed version if known, dependency scope, runtime
-reachability evidence, decision, and linked finding or dismissal reason. If a vulnerable production
-dependency is reachable, or reachability cannot be disproven with concrete code/package evidence, promote
-it to a candidate finding with `Category: cve` or `supply-chain`.
+First, finish delegated tool triage. `.security/tool_triage.md` is mandatory whenever
+`.security/tool-results/` contains output. Tool-triage sub-agents must account for each scanner output
+file and each dependency advisory from Trivy/Grype/OSV/Dependency-Check/dep-scan/npm/pnpm/yarn/etc. The
+orchestrator merges their rows and checks coverage; it does not inspect raw tool output itself.
 
-Then validate candidates (prioritize the scariest first):
+Then validate candidates through validation sub-agents (prioritize the scariest first):
 
-- Decide whether it's reproducible. Where practical, **reproduce it in the sandbox**: craft the minimal
-  PoC that proves the source reaches the sink (a payload that triggers the SQL/command/path, a tar entry
-  that lands a root-owned file, a request that bypasses the auth check). Capture commands, stdout/stderr,
-  exit codes, and artifacts as evidence — exactly like the validation section of `assets/example_finding.md`.
-- If reproduction isn't possible (declarative/config bug, missing toolchain, would require destructive
-  action), validate by **targeted code review** and say so, recording why dynamic repro was skipped.
-- Mark each finding `validated`, `likely`, `unvalidated`, or `false-positive` (the four-tier ladder in
-  `references/reporting.md`). `likely` = strong path + impact but not fully reproduced; don't over-claim
-  `validated` without a repro or strong static proof, and don't under-claim a clear bug as `unvalidated`.
-  Drop false positives from `findings/` but note them in the summary so the user knows they were considered.
+- For each candidate, spawn a validation sub-agent with the exact claim, paths, source/sink flow,
+  supporting tool rows, threat-model assumptions, and requested proof.
+- Where practical, the validation sub-agent reproduces it in the sandbox: minimal PoC proving source
+  reaches sink, captured command/stdout/stderr/exit code/artifact. The main agent does not run PoCs.
+- If reproduction is not possible, the validation sub-agent performs targeted code-review proof and
+  records why dynamic reproduction was skipped.
+- The orchestrator reviews returned evidence and assigns `validated`, `likely`, `unvalidated`, or
+  `false-positive`. If evidence is thin, send a follow-up validation sub-agent instead of reading the
+  code yourself.
 
 If a validation check fails because of an environment gap (tool missing, network 403), record the
-blindspot and fall back to code-review validation — don't silently drop the finding.
+blindspot and delegate code-review validation — don't silently drop the finding.
+
+### Validation task brief (Orchestrator → validation sub-agent)
+
+```
+- Task: Validate candidate <temp id/title>.
+- Candidate: <title, suspected class, affected paths, source->sink or broken invariant, tool-triage rows>.
+- Threat model context: <relevant assets/trust boundaries/reachability>.
+- Do:
+  1. Confirm whether attacker-controlled input or changed behavior reaches the sink/invariant break.
+  2. Prefer a safe minimal repro only if it does not execute risky project lifecycle code or touch external systems.
+  3. If using code-review proof, cite path:line evidence for every hop and explain why dynamic repro was skipped.
+  4. Check negative evidence: guards, sanitizers, allowlists, deployment preconditions, compensating controls, later fixes.
+  5. Return validation rubric, evidence snippets, recommended status, confidence, blindspots, and patch regression risk.
+- Constraints: read-only except safe validation artifacts under .security/validation/<temp id>/; no source patching.
+```
 
 ## Step 5 — Severity + exploit chaining
 
-For each validated finding, follow `references/reporting.md`:
+For each validated/likely finding, use sub-agent evidence and follow `references/reporting.md`:
 
 - Assign **likelihood** and **impact**, derive a **matrix severity**, then apply threat-model policy to
   reach a **final severity** (critical / high / medium / low). Record the rationale, assumptions, and the
@@ -310,12 +362,14 @@ For each validated finding, follow `references/reporting.md`:
 - **Chain.** Individually-medium findings can compose into a critical kill-chain (e.g. an auth bypass +
   an IDOR + a deserialization sink = unauthenticated RCE). Look across findings for chains and document
   them: the ordered path, what each link grants, and the combined severity (which can exceed any single link's).
+  If chain evidence requires extra code/path checks, delegate a chain-validation sub-agent.
 
 ## Step 6 — Report
 
 Write artifacts (read `references/reporting.md` for the exact templates, and use `assets/finding_template.md`):
 
-- **One file per finding** at `.security/findings/SEC-NNN-<slug>.md`, in the `assets/example_finding.md` shape:
+- **One file per finding** at `.security/findings/SEC-NNN-<slug>.md`, drafted by finding-draft
+  sub-agents and finalized mechanically by the orchestrator, in the `assets/example_finding.md` shape:
   title, criticality (with attack-path severity), status, metadata, summary, validation (rubric + report),
   evidence (code excerpts with notes), proposed patch (diff), and attack-path analysis (final/likelihood/
   impact/assumptions/path/path-evidence/narrative/controls/blindspots). Assign IDs chronologically by
@@ -332,10 +386,12 @@ Write artifacts (read `references/reporting.md` for the exact templates, and use
   user-approved degraded local-only missing binary, unsupported ecosystem, too risky, timeout), and a
   coverage statement (languages, package managers, IaC/CI files, auth/secret surfaces, public entry
   points). This makes coverage auditable.
-- **A summary** at `.security/report.md`: executive summary, scope, a severity-sorted findings table
-  (ID, severity, status, title, location, link), the chained attack paths, dependency/CVE summary (only
-  actionable, with reachability), tool triage summary, redacted secrets summary, false positives
-  considered, tool + manual coverage, recommended next actions, and blindspots / what wasn't scanned.
+- **A summary** at `.security/report.md`, drafted by a report-draft sub-agent from the finding files,
+  tool triage, manifest, and commit ledger, then sanity-checked by the orchestrator: executive summary,
+  scope, a severity-sorted findings table (ID, severity, status, title, location, link), the chained
+  attack paths, dependency/CVE summary (only actionable, with reachability), tool triage summary,
+  redacted secrets summary, false positives considered, tool + manual coverage, recommended next actions,
+  and blindspots / what wasn't scanned.
 
 Do not stop here when commit history is in scope. The current-HEAD report is an interim checkpoint; keep
 going into Step 7 in the same run unless the user explicitly scoped the audit to current HEAD / a single
@@ -397,6 +453,8 @@ If the gate fails, do **not** report the audit as complete. Fix the missing work
 - If history is incomplete, continue Step 7 until `.security/latest_reviewed_commit` equals `git rev-parse HEAD`.
 - If the history ledger/queue/artifacts are incomplete, write the missing per-commit entries by actually
   reviewing those commits; do not synthesize ledger rows to satisfy the gate.
+- If the delegation log is missing phases, dispatch the missing sub-agent work and record real outputs;
+  do not synthesize delegation rows for work done in the main context.
 - If tool outputs are untriaged, finish `.security/tool_triage.md`; create findings for actionable or
   not-disproven production CVEs, and record evidence-backed dismissals for non-actionable advisories.
 - If a required artifact is missing, write it.
@@ -426,6 +484,7 @@ with the Security Officer agent" below):
 ├── report.md                  # latest scan summary (exec summary + severity table + chains + coverage)
 ├── scan_manifest.md           # tools run/skipped, versions, commands, exit codes, coverage statement
 ├── tool_triage.md             # every tool output/advisory mapped to finding/dismissal/blocker
+├── delegation_log.jsonl       # one record per sub-agent task/output
 ├── completion_gate.txt        # output of scripts/audit_completion_gate.py from the final pass
 ├── findings/
 │   └── SEC-NNN-slug.md        # one finding per file (example_finding shape), chronological IDs

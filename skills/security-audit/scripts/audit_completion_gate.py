@@ -23,6 +23,7 @@ from pathlib import Path
 ADVISORY_RE = re.compile(r"\b(?:CVE-\d{4}-\d{4,}|GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4})\b", re.I)
 SECURITY_DIR_DEFAULT = ".security"
 VALID_REVIEW_STATUSES = {"skip", "reviewed-no-finding", "candidate"}
+REQUIRED_DELEGATION_BASE_PHASES = {"threat-model", "scan", "report-draft"}
 
 
 def git_head(repo: Path) -> str | None:
@@ -236,6 +237,68 @@ def validate_history_ledger(repo: Path, security_dir: Path, head: str | None) ->
     return errors, warnings
 
 
+def read_jsonl(path: Path) -> tuple[list[dict[str, object]], list[str]]:
+    entries: list[dict[str, object]] = []
+    errors: list[str] = []
+    for lineno, line in enumerate(read_text(path).splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            value = json.loads(stripped)
+        except json.JSONDecodeError:
+            errors.append(f"{path.name} line {lineno} is malformed JSON")
+            continue
+        if not isinstance(value, dict):
+            errors.append(f"{path.name} line {lineno} is not a JSON object")
+            continue
+        entries.append(value)
+    return entries, errors
+
+
+def validate_delegation_log(security_dir: Path, *, history_required: bool, tool_files: list[Path]) -> list[str]:
+    errors: list[str] = []
+    log_path = security_dir / "delegation_log.jsonl"
+    if not log_path.exists():
+        return ["missing required artifact: .security/delegation_log.jsonl"]
+
+    entries, parse_errors = read_jsonl(log_path)
+    errors.extend(parse_errors)
+    if not entries:
+        errors.append(".security/delegation_log.jsonl is empty")
+        return errors
+
+    phases: set[str] = set()
+    for i, entry in enumerate(entries, start=1):
+        phase = str(entry.get("phase", "")).strip()
+        worker = str(entry.get("subagent_id", "") or entry.get("worker", "")).strip()
+        status = str(entry.get("status", "")).strip()
+        output = str(entry.get("output_artifact", "") or entry.get("output", "")).strip()
+        if not phase:
+            errors.append(f"delegation_log entry {i} has no phase")
+        else:
+            phases.add(phase)
+        if not worker:
+            errors.append(f"delegation_log entry {i} has no subagent_id/worker")
+        if status not in {"completed", "blocked", "rerun-requested"}:
+            errors.append(f"delegation_log entry {i} has invalid status {status!r}")
+        if not output:
+            errors.append(f"delegation_log entry {i} has no output_artifact")
+
+    required = set(REQUIRED_DELEGATION_BASE_PHASES)
+    if tool_files:
+        required.add("tool-triage")
+    if history_required:
+        required.add("commit-review")
+    if list((security_dir / "findings").glob("SEC-*.md")) or list((security_dir / "fixed").glob("SEC-*.md")):
+        required.update({"validation", "finding-draft"})
+
+    missing = sorted(required - phases)
+    if missing:
+        errors.append("delegation_log.jsonl is missing required phase(s): " + ", ".join(missing))
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Check whether a security-audit run is allowed to be called complete.",
@@ -253,6 +316,12 @@ def main() -> int:
         type=int,
         default=40,
         help="Maximum untriaged advisory IDs to print in the error output.",
+    )
+    parser.add_argument(
+        "--require-delegation-log",
+        choices=["yes", "no"],
+        default="yes",
+        help="Require .security/delegation_log.jsonl proving subagent delegation for audit phases.",
     )
     args = parser.parse_args()
 
@@ -294,6 +363,15 @@ def main() -> int:
             warnings.append("history not required, but report/manifest do not explain why it was out of scope")
 
     tool_files = iter_tool_files(security_dir / "tool-results")
+    if args.require_delegation_log == "yes":
+        errors.extend(
+            validate_delegation_log(
+                security_dir,
+                history_required=args.history_required == "yes",
+                tool_files=tool_files,
+            )
+        )
+
     artifact_text = all_artifact_text(security_dir)
     triage_text = read_text(security_dir / "tool_triage.md")
 

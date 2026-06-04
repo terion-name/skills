@@ -34,5 +34,6 @@ echo "       fixed/        -> remediated findings moved here, keeping original S
 echo "       tool-results/ -> raw scanner output only (gitignored)"
 echo "       validation/   -> repro notes/commands/output per finding, SEC-NNN/ (gitignored)"
 echo "       tool_triage.md -> every tool output/advisory mapped to finding/dismissal/blocker"
+echo "       delegation_log.jsonl -> one record per sub-agent task/output"
 echo "       completion_gate.txt -> final audit_completion_gate.py output"
 echo "       scan_manifest.md + report.md -> written during/after the scan"
