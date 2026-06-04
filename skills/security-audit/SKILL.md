@@ -59,6 +59,8 @@ defensive assessment of the user's own code.
 
 Mirror the Codex Security stages. Each stage has a dedicated reference; read it when you reach that stage.
 
+0. **Tooling preflight** — before threat modeling or scanning, prove whether containerized security
+   tooling is available. See `references/tooling.md` and `scripts/tooling_preflight.py`.
 1. **Threat model** — establish or refresh `.security/threat_model.md`. See `references/threat-model.md`.
 2. **Scope** — decide what to scan (full repo, a diff, a subtree) and partition it for parallel work.
 3. **Current-HEAD scan** — fan out across the current tree: deterministic tools (SAST / SCA-CVE /
@@ -136,8 +138,31 @@ except where explicitly allowed below — the point is to preserve your context 
   If sub-agent spawning fails, surface that as the blocker. You can still run a degraded single-threaded
   scan yourself, but say so explicitly — parallel delegation is the intended mode.
 - A git repository is ideal (enables diff/commit scoping and patch generation) but not required.
-- Network access for SCA/CVE lookups and tool installation may be restricted; `references/tooling.md`
-  covers offline fallbacks.
+- Docker is the preferred scanner runtime. Network access may be needed to pull scanner images or update
+  rule/CVE databases; `references/tooling.md` defines the strict preflight and offline/degraded options.
+
+## Step 0 — Tooling preflight (must be first)
+
+Before threat modeling, partitioning, or spawning scan agents, read `references/tooling.md` and run:
+
+```bash
+scripts/tooling_preflight.py --write .security/tooling_preflight.md
+```
+
+This is a gate, not a courtesy check:
+
+- If Docker works, run instrumental security scans in containers with the official per-tool images listed
+  in `references/tooling.md`. Do not skip a required scanner just because the host machine lacks the
+  local binary.
+- If Docker is missing or the daemon cannot run, stop before the audit scan. Tell the user which scanners
+  are required for this repo, which local tools are missing, and recommend installing/starting Docker so
+  scans run in isolated containers with mounted code.
+- Offer exactly one degraded option: the user may explicitly say to continue with only available local
+  tools. Do not infer approval from silence. If they approve, record "user-approved degraded tooling" and
+  every missing scanner in `.security/scan_manifest.md` and `.security/report.md`.
+- If scanner images or CVE/rule DB updates cannot be pulled because of network/registry restrictions,
+  treat that like missing Docker: list the blocked image/DB and stop unless the user explicitly approves
+  continuing with cached/available tools.
 
 ## Step 1 — Threat model
 
@@ -181,8 +206,11 @@ Each sub-agent does two complementary things, because — as Codex documents —
 deterministic tooling catch different bugs:
 
 1. **Run deterministic tools** for its partition (SAST, dependency/CVE scan, secret scan). Exact tools
-   and commands per ecosystem are in `references/tooling.md`. Tool output is *input to triage*, not a
-   finding by itself — every tool hit must be confirmed against real code before it becomes a candidate.
+   and container commands per ecosystem are in `references/tooling.md`. If Step 0 found Docker available,
+   use containers rather than host-local binaries. If Step 0 did not complete, or degraded local-only
+   scanning was not explicitly approved by the user, stop and ask the orchestrator to complete Step 0.
+   Tool output is *input to triage*, not a finding by itself — every tool hit must be confirmed against
+   real code before it becomes a candidate.
 2. **Semantic review** against the relevant policy file(s) in `references/policies/`. These encode the
    strict rules per language/surface (injection, XSS, SSRF, deserialization, auth/IDOR, memory safety,
    secrets, IaC, etc.) with the dangerous patterns and the sinks to grep for.
@@ -201,9 +229,11 @@ They do **not** assign final severity — that's your job after validation and c
 - Surface / scope: <files, directories, or attack surface this partition covers>
 - Threat-model context: <relevant trust boundaries + what's reachable, pulled from .security/threat_model.md>
 - Do:
-  1. Run the deterministic tools listed in references/tooling.md for this partition's languages. Save
-     raw tool output under .security/tool-results/ (one file per tool, JSON/SARIF where supported). Only
-     run "safe/static" tools per the skill's repo-safety tiering — never project install/build scripts.
+  1. Confirm Step 0 tooling preflight is present. If Docker was available, run deterministic tools through
+     the official scanner containers listed in references/tooling.md, with source mounted read-only and
+     outputs under .security/tool-results/. If Docker was not available, proceed only when the orchestrator
+     gives explicit user-approved degraded-tooling permission. Only run "safe/static" tools per the
+     skill's repo-safety tiering — never project install/build scripts.
      If a tool reports anything that survives triage or cannot be dismissed, turn it into a normal
      candidate finding; do not write Markdown summaries in .security/tool-results/.
   2. Semantically review the code against references/policies/<relevant>.md. Look specifically for the
@@ -263,10 +293,12 @@ Write artifacts (read `references/reporting.md` for the exact templates, and use
   starting after the highest `SEC-NNN` already present in `.security/findings/` or `.security/fixed/`;
   do not renumber or reuse fixed IDs. Put repro artifacts under `.security/validation/SEC-NNN/`. Keep
   proposed patches embedded in the finding file.
-- **A scan manifest** at `.security/scan_manifest.md`: tools detected + versions, commands run + exit
-  codes + output paths (flagged static vs. project-executing), tools skipped + why (missing binary,
-  unsupported ecosystem, no network, too risky, timeout), and a coverage statement (languages, package
-  managers, IaC/CI files, auth/secret surfaces, public entry points). This makes coverage auditable.
+- **A scan manifest** at `.security/scan_manifest.md`: Step 0 tooling preflight decision, Docker status,
+  required scanner images, tools detected + versions, commands run + exit codes + output paths (flagged
+  static vs. project-executing), tools skipped + why (container image unavailable, DB/rules blocked,
+  user-approved degraded local-only missing binary, unsupported ecosystem, too risky, timeout), and a
+  coverage statement (languages, package managers, IaC/CI files, auth/secret surfaces, public entry
+  points). This makes coverage auditable.
 - **A summary** at `.security/report.md`: executive summary, scope, a severity-sorted findings table
   (ID, severity, status, title, location, link), the chained attack paths, dependency/CVE summary (only
   actionable, with reachability), redacted secrets summary, false positives considered, tool + manual
@@ -322,6 +354,7 @@ with the Security Officer agent" below):
 ```
 .security/
 ├── threat_model.md            # persistent; created once, refreshed as architecture changes
+├── tooling_preflight.md        # Docker/tool availability gate and required scanner set
 ├── latest_reviewed_commit     # latest commit SHA assessed by the incremental commit-review flow
 ├── commit_review_progress.md  # in-flight commit queue/progress so long reviews can resume
 ├── report.md                  # latest scan summary (exec summary + severity table + chains + coverage)
@@ -381,7 +414,7 @@ scripts/upload_findings_plane.py --project-id workspace-slug/project-uuid --host
 
 - `references/threat-model.md` — how to build/refresh the threat model; format and what each section must cover.
 - `references/tooling.md` — security tools per ecosystem (SAST, SCA/CVE, secrets, fuzzing), install +
-  run commands, and offline fallbacks. Read before Step 3.
+  container run commands, and strict missing-tool behavior. Read before Step 0 and Step 3.
 - `references/reporting.md` — validation method, severity/criticality calibration, exploit chaining, and
   the finding + summary report formats. Read before Steps 4–7.
 - `references/commit-history-review.md` — incremental per-commit review after the current-HEAD sweep:
@@ -401,5 +434,7 @@ scripts/upload_findings_plane.py --project-id workspace-slug/project-uuid --host
 - `assets/example_finding.md`, `assets/example_threat_model.md` — anonymized, fully worked examples
   showing the target shape and quality bar. Read these to calibrate voice and depth before writing your own.
 - `scripts/init_security.sh` — scaffold the `.security/` directory.
+- `scripts/tooling_preflight.py` — fingerprint the repo, check Docker, identify required scanner images
+  and missing local tools, and write `.security/tooling_preflight.md`.
 - `scripts/upload_findings_github.py`, `scripts/upload_findings_gitlab.py`, `scripts/upload_findings_plane.py` —
   upload parsed findings to issue trackers from a user-controlled network environment.

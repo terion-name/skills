@@ -238,6 +238,7 @@ raw scanner output and `scan_manifest.md` are enough.
 
 ## Coverage
 - Scanned: <surfaces / dirs / diff>. Languages: <...>. See scan_manifest.md for tools + commands.
+- Tooling preflight: <containerized via Docker | user-approved degraded local-only | blocked>, link to tooling_preflight.md.
 - Manual review covered: <security-sensitive areas inspected>.
 - DFD/source-sink coverage: <flows, sources, sinks, sanitizers/guards, business invariants reviewed>.
 - Cloud/IaC identity paths: <workload/service account/OIDC -> cloud role -> API actions -> assets reviewed>.
@@ -259,6 +260,13 @@ If there are no findings, say so clearly and still include coverage, skipped too
 ```
 # Scan manifest — <repo> @ <commit> (<branch>, <clean|dirty>) — <date>
 
+## Tooling preflight
+- Preflight artifact: .security/tooling_preflight.md
+- Decision: <containerized via Docker | user-approved degraded local-only | blocked>
+- Docker: <available/unavailable/version/error>
+- Required scanner images: <semgrep/semgrep, aquasec/trivy, ...>
+- User approval for degraded scan: <not needed | exact user wording/date | none>
+
 ## Tools run
 | Tool | Version | Command | Exit | Output | Class |
 |------|---------|---------|------|--------|-------|
@@ -268,7 +276,8 @@ If there are no findings, say so clearly and still include coverage, skipped too
 (non-zero exit caused by findings is normal — record it, don't treat it as scan failure)
 
 ## Tools skipped
-- <tool> — <missing binary | unsupported ecosystem | no network | too risky | timeout | no manifest>
+- <tool> — <not required for detected ecosystem | container image unavailable | DB/rules unavailable |
+  user-approved degraded local-only missing binary | unsupported ecosystem | too risky | timeout>
 
 ## Coverage statement
 - Languages / package managers: <...>
