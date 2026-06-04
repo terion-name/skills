@@ -38,7 +38,7 @@ Unless the task says otherwise:
 - Run a full repository security review on the current workspace.
 - Create or update `.security/threat_model.md` before final triage.
 - Save individual findings under `.security/findings/`.
-- Save raw or summarized tool outputs under `.security/tool-results/`.
+- Save raw scanner outputs only under `.security/tool-results/`; actionable tool hits become normal finding files.
 - Save the final scan report to `.security/report.md`.
 - Save validation notes and proof artifacts under `.security/validation/`.
 - Modify only `.security/**`; source-code remediation belongs in a separate explicitly delegated task.
@@ -55,6 +55,10 @@ Unless the task says otherwise:
 - **Do not bury the user in raw tool output.** Preserve raw outputs in `.security/tool-results/`, but report only triaged, security-relevant findings.
 - **Do not scan session/internal agent storage.** Never read or scan `~/.mux/sessions/**`, `.git/objects/**` directly, temporary agent patch storage, or unrelated system directories.
 - **Do not upload proprietary code to SaaS tools** unless the repository is already configured for that service or the user explicitly asks. Prefer local/offline scanner modes and note tools that download rule or vulnerability databases.
+- **Respect `.security/` worktree resets.** Only `.security/**` files that exist in the current worktree
+  are existing audit state. If tracked `.security` artifacts are deleted, treat that as an intentional
+  fresh start unless the task explicitly asks to recover old artifacts. Do not use `git show`, `HEAD`,
+  prior commits, stashes, or reflogs to seed the threat model, cursor, findings, numbering, or dedupe.
 
 ## Repository safety model
 
@@ -88,8 +92,6 @@ Create this structure as needed:
       notes.md
       commands.txt
       output.txt
-  patches/
-    SEC-001-suggested.patch
 ```
 
 `scan_manifest.md` should include:
@@ -110,7 +112,9 @@ Create this structure as needed:
 
 ### 2. Build or refresh the threat model
 
-Save the result to `.security/threat_model.md`. If a threat model already exists, update it instead of replacing useful context.
+Save the result to `.security/threat_model.md`. If a threat model exists in the current worktree, update
+it instead of replacing useful context. If it was tracked in git but is deleted in the worktree, build a
+new one; do not recover the deleted copy from git history unless explicitly asked.
 
 The threat model must include:
 
@@ -138,7 +142,7 @@ Do not fail the whole scan because a scanner exits non-zero on findings. Capture
 Use these as defaults when the tools exist:
 
 ```bash
-mkdir -p .security/findings .security/tool-results .security/validation .security/patches
+mkdir -p .security/findings .security/fixed .security/tool-results .security/validation
 
 git rev-parse HEAD > .security/tool-results/git-head.txt 2>&1 || true
 git status --short > .security/tool-results/git-status.txt 2>&1 || true
@@ -300,7 +304,7 @@ Detected by: manual review|semgrep|trivy|osv-scanner|gitleaks|codeql|other
 <Minimal fix. Mention safer APIs/configs/pinning/checksums/authorization patterns.>
 
 ## Suggested patch
-<Optional short diff or path to `.security/patches/SEC-001-suggested.patch`; do not modify source unless explicitly asked.>
+<Optional short diff embedded here; do not create `.security/patches/` and do not modify source unless explicitly asked.>
 
 ## False-positive checks / limitations
 <Why this is not a scanner-only false positive, or what remains uncertain.>

@@ -145,11 +145,13 @@ One file per finding at `.security/findings/SEC-NNN-<slug>.md`, following `asset
 
 ## Finding numbering and lifecycle
 
-Assign finding IDs chronologically. For every scan, including the first one, inspect both
-`.security/findings/` and `.security/fixed/`, find the highest existing `SEC-NNN`, and assign new
-findings starting at the next unused ID. Do not reuse IDs from fixed findings, and do not renumber old
-findings when severity changes. Severity belongs in the finding metadata and the severity-sorted summary
-table, not in the ID sequence.
+Assign finding IDs chronologically. For every scan, including the first one, inspect only the
+`.security/findings/` and `.security/fixed/` files that currently exist on disk, find the highest existing
+`SEC-NNN`, and assign new findings starting at the next unused ID. Deleted tracked `.security` files in
+git history do not count; if the user removed them, treat that as a reset unless they explicitly ask you
+to restore prior audit state. Do not reuse IDs from fixed findings that still exist in the worktree, and
+do not renumber old findings when severity changes. Severity belongs in the finding metadata and the
+severity-sorted summary table, not in the ID sequence.
 
 When a finding is remediated, move its file from `.security/findings/` to `.security/fixed/` and update
 its metadata with `Resolution: fixed`, the fix commit/date if known, and any follow-up validation notes.
@@ -159,8 +161,9 @@ remain traceable.
 Commit-history review can create fixed historical reports directly: if an old commit introduced a bug
 that a later commit already fixed, write the standard finding to `.security/fixed/` with `Commit:
 <introducing sha>`, `Fixed in commit: <fix sha>`, and `Resolution: fixed`. If the same issue already
-exists in `.security/findings/` or `.security/fixed/`, enrich the existing report with the commit evidence
-instead of creating a duplicate.
+exists in current worktree `.security/findings/` or `.security/fixed/`, enrich the existing report with
+the commit evidence instead of creating a duplicate. Do not dedupe against deleted reports from git
+history unless the user explicitly asks to recover old audit artifacts.
 
 Do not use alternate metadata keys for historical reports. Fixed reports must still use the same header,
 `# Metadata`, `Criticality`, `Commit`, `Fixed in commit`, `Category`, `Detected by`, and `Resolution`

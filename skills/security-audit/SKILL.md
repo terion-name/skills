@@ -128,6 +128,12 @@ except where explicitly allowed below — the point is to preserve your context 
 - **Do not patch the codebase as part of the scan.** Like Codex, you *propose* patches as diffs inside
   findings; you do not apply them. If the user explicitly asks you to fix afterward, that's a separate
   step (and a good fit for the `orchestrate` skill).
+- **The current worktree is the source of truth for `.security/`.** Use only `.security/**` artifacts
+  that exist on disk now. If `.security` files are tracked in git but deleted in the worktree, treat that
+  as an intentional reset/fresh start unless the user explicitly asks you to recover old artifacts. Do
+  not read deleted `.security` files from `HEAD`, `git show`, prior commits, stashes, or reflogs to seed
+  the threat model, cursor, progress, findings, fixed reports, numbering, or dedupe. Git history is for
+  reviewing product commits, not resurrecting audit state.
 - **Artifacts are append-only-ish.** Never delete prior findings without the user's say-so; supersede them.
   When a finding is fixed, move it from `.security/findings/` to `.security/fixed/` and keep its original
   `SEC-NNN` ID. Never recycle IDs.
@@ -168,14 +174,14 @@ This is a gate, not a courtesy check:
 
 Read `references/threat-model.md`, then:
 
-- If `.security/threat_model.md` already exists, **read it and treat it as the source of truth** for
-  trust boundaries, assumptions, and criticality calibration. Refresh only the parts the user flags as
-  stale, or that the current diff obviously changes.
-- If it does **not** exist, build it now. Run `scripts/init_security.sh` to scaffold the `.security/`
-  directory, then spawn 2–4 `explore` sub-agents in parallel to map the architecture (entry points,
-  auth, DFD/source-sink flows, data stores, external I/O, privileged operations, build/release/
-  supply-chain). Synthesize their reports into `.security/threat_model.md` using
-  `assets/threat_model_template.md`.
+- If `.security/threat_model.md` exists in the current worktree, **read it and treat it as the source of
+  truth** for trust boundaries, assumptions, and criticality calibration. Refresh only the parts the user
+  flags as stale, or that the current diff obviously changes.
+- If it does **not** exist in the current worktree, build it now. Do not recover a deleted tracked threat
+  model from git history. Run `scripts/init_security.sh` to scaffold the `.security/` directory, then
+  spawn 2–4 `explore` sub-agents in parallel to map the architecture (entry points, auth,
+  DFD/source-sink flows, data stores, external I/O, privileged operations, build/release/supply-chain).
+  Synthesize their reports into `.security/threat_model.md` using `assets/threat_model_template.md`.
 
 The threat model is what makes the rest of the scan *prioritized* rather than a flat checklist — it
 tells you which surfaces are internet-reachable, what's trusted, and what "critical" means for *this*
@@ -290,8 +296,9 @@ Write artifacts (read `references/reporting.md` for the exact templates, and use
   title, criticality (with attack-path severity), status, metadata, summary, validation (rubric + report),
   evidence (code excerpts with notes), proposed patch (diff), and attack-path analysis (final/likelihood/
   impact/assumptions/path/path-evidence/narrative/controls/blindspots). Assign IDs chronologically by
-  starting after the highest `SEC-NNN` already present in `.security/findings/` or `.security/fixed/`;
-  do not renumber or reuse fixed IDs. Put repro artifacts under `.security/validation/SEC-NNN/`. Keep
+  starting after the highest `SEC-NNN` file currently present on disk in `.security/findings/` or
+  `.security/fixed/`; do not count deleted tracked files from git history. Do not renumber or reuse fixed
+  IDs that still exist in the worktree. Put repro artifacts under `.security/validation/SEC-NNN/`. Keep
   proposed patches embedded in the finding file.
 - **A scan manifest** at `.security/scan_manifest.md`: Step 0 tooling preflight decision, Docker status,
   required scanner images, tools detected + versions, commands run + exit codes + output paths (flagged
@@ -316,9 +323,10 @@ single diff/PR, or a subtree. Do not merely write a queued backlog and stop; cre
 `.security/commit_review_progress.md` is the start of the history pass, not a completion point. This flow
 looks for security issues and serious functional regressions introduced by individual commits.
 
-Use `.security/latest_reviewed_commit` as the durable cursor. On the first run, review commits from the
-last 2 months, capped at 1000 commits. On later runs, review commits after the cursor through `HEAD`.
-Always process oldest to newest.
+Use `.security/latest_reviewed_commit` as the durable cursor only if it exists in the current worktree and
+is non-empty. If it is deleted or absent, treat this as a first run: review commits from the last 2
+months, capped at 1000 commits. On later runs, review commits after the cursor through `HEAD`. Always
+process oldest to newest. Do not recover a deleted cursor from git history.
 
 Actively use subagents and keep durable progress:
 
@@ -334,11 +342,12 @@ Actively use subagents and keep durable progress:
 
 Use the same validation, severity, chaining, and finding format as the current-HEAD scan. If a commit
 introduced an issue, set `Commit: <introducing sha>` in the finding metadata. Before writing, reconcile
-against `.security/findings/` and `.security/fixed/`: enrich an existing report if it is the same issue;
-write to `.security/findings/` if still present; write to `.security/fixed/` with `Fixed in commit:
-<sha>` if a later commit already fixed it. After the per-commit pass, update `.security/report.md` and
-`.security/scan_manifest.md` with commit-review coverage, skipped commits, new/enriched findings, and
-the latest cursor.
+only against `.security/findings/` and `.security/fixed/` files currently present on disk: enrich an
+existing report if it is the same issue; write to `.security/findings/` if still present; write to
+`.security/fixed/` with `Fixed in commit: <sha>` if a later commit already fixed it. Do not dedupe
+against deleted reports from git history unless the user explicitly asked to restore old audit state.
+After the per-commit pass, update `.security/report.md` and `.security/scan_manifest.md` with
+commit-review coverage, skipped commits, new/enriched findings, and the latest cursor.
 
 Only after Step 7 is complete or explicitly out of scope, finish with a short chat summary: counts by
 severity, the top one or two attack paths in plain language, the highest-leverage fix, and the commit
@@ -370,8 +379,9 @@ with the Security Officer agent" below):
 
 Keep `threat_model.md`, `latest_reviewed_commit`, `commit_review_progress.md`, `report.md`,
 `scan_manifest.md`, `findings/`, and `fixed/` committed so the security context persists across scans
-(later scans get faster by focusing on new commits, like Codex incremental scans). Raw files in
-`tool-results/` and bulky `validation/` artifacts can be gitignored if noisy.
+(later scans get faster by focusing on new commits, like Codex incremental scans). If the user deletes
+those tracked artifacts in the worktree, respect that as a reset and start from the files that remain.
+Raw files in `tool-results/` and bulky `validation/` artifacts can be gitignored if noisy.
 
 ## Upload findings to issue trackers
 

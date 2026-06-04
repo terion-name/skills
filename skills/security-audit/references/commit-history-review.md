@@ -6,11 +6,14 @@ their introduction/fix evidence.
 
 ## Cursor and commit range
 
-Use `.security/latest_reviewed_commit` as the durable cursor. It contains one commit SHA: the latest
-commit whose diff has been assessed, including skipped non-functional commits.
+Use `.security/latest_reviewed_commit` as the durable cursor only when that file exists in the current
+worktree. It contains one commit SHA: the latest commit whose diff has been assessed, including skipped
+non-functional commits. Do not recover a deleted cursor from git history; a deleted tracked cursor means
+the current audit state was reset unless the user explicitly asks to restore old artifacts.
 
-- If the cursor exists and is non-empty, review commits after it through `HEAD`.
-- If the cursor is absent or empty, review commits from the last 2 months, capped at 1000 commits.
+- If the cursor exists on disk and is non-empty, review commits after it through `HEAD`.
+- If the cursor is absent from the worktree or empty, review commits from the last 2 months, capped at
+  1000 commits.
 - Always process commits from oldest to newest.
 
 Useful commands:
@@ -212,9 +215,11 @@ Constraints: read-only review; do not patch; do not assign final severity.
 ## Reconciliation and artifacts
 
 For every candidate, validate with the same validation/severity/chaining rules as the current-HEAD scan.
-Then reconcile against existing `.security/findings/` and `.security/fixed/` before writing. Historical
-validation must distinguish three states: introduced and still present, introduced and later fixed, or
-introduced but later changed into a different unresolved issue.
+Then reconcile against existing worktree `.security/findings/` and `.security/fixed/` before writing.
+Do not use deleted tracked reports from git history for dedupe/enrichment unless the user explicitly
+asked to restore old audit state. Historical validation must distinguish three states: introduced and
+still present, introduced and later fixed, or introduced but later changed into a different unresolved
+issue.
 
 - If the issue is still present and not already reported, write a normal finding in `.security/findings/`.
   Include `Commit: <introducing sha>` in metadata.
