@@ -5,11 +5,12 @@ Origin: <introduced-by-diff|pre-existing|uncertain>   # commit/diff mode only; o
 
 # Metadata
 Repo: <owner/name>
-Commit: <introducing short sha, or reviewed HEAD/diff sha when not known>
-Fixed in commit: <short sha if already fixed; omit if unresolved>
+Commit: <introducing short sha, or reviewed HEAD/diff sha when not known. In commit-history mode this MUST be the introducing commit, not the review HEAD>
+Fixed in commit: <short sha if already fixed; omit if unresolved. Do not replace with nonstandard "Fixed:" metadata>
 Author: <if known>
 Created: <date, time>
 Category: <auth|injection|ssrf|supply-chain|secrets|cve|container|iac|crypto|memory|functional-regression|other>
+Standards: <ASVS vX.Y.Z-..., OWASP APIx:YYYY, CWE-..., NIST SSDF PW/RV/..., SLSA/Scorecard where applicable; omit if not applicable>
 Detected by: <manual review|commit-review|semgrep|trivy|osv-scanner|gitleaks|codeql|other>
 Assignee: <Unassigned>
 Signals: Security, <Validated|Likely|Unvalidated>, <Patch generated>, <Attack-path>
@@ -30,6 +31,11 @@ enters, the sink it reaches, why the guard is absent or bypassable, and the reco
 <How you validated. If dynamic: the PoC, the command run, and the observed result (with output excerpts).
 If code-review only: trace each hop with path:line and state explicitly why dynamic repro was skipped
 (missing toolchain, network blocked, would be destructive). Record environment caveats.>
+## Negative evidence / false-positive checks
+<What you checked that could have made this non-exploitable: ownership guards, sanitizers, allowlists,
+framework behavior, deployment preconditions, later fixes. Say what still failed and why.>
+## Revalidation after fix
+<How to confirm remediation: command/test/static check/manual trace, and what regression risk the patch has.>
 
 # Evidence
 <path/to/file (Lstart to Lend)>
@@ -66,5 +72,7 @@ and reachability for this project.>
 ## Controls
 - <missing control that would prevent this>
 - <…>
+## Patch regression risk
+- <behavior/security compatibility risk introduced by the proposed fix, and tests/checks that should cover it>
 ## Blindspots
 - <what you could not fully verify, env gaps, assumptions not exhaustively checked>

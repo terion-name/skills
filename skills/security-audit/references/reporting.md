@@ -42,6 +42,12 @@ Then classify on a four-tier ladder:
 each link rather than asserting the conclusion. Save repro notes/commands/output under
 `.security/validation/SEC-NNN/`.
 
+**Negative evidence and revalidation.** Every finding should say what would have made it a false positive
+and what you checked: ownership guards, sanitizers, allowlists, deployment preconditions, framework
+behavior, compensating controls, or later fixes. Also include a short revalidation plan for the proposed
+fix and the main patch regression risk. When the user later remediates a finding, rerun that specific
+validation plan before moving it to `.security/fixed/`.
+
 **Secret redaction.** When evidence involves a real secret, never write the full value into a finding,
 validation artifact, or chat. Record location + type + a redacted fingerprint that's enough to locate
 and triage it: `AWS-key-like token at config/prod.env:12, prefix AKIA…/suffix …X7Q, confidence high`.
@@ -116,13 +122,16 @@ One file per finding at `.security/findings/SEC-NNN-<slug>.md`, following `asset
   uncertain>` so reviewers know whether the PR caused it.
 - **# Metadata:** repo, commit, fixed-in commit if applicable, author (if known), created date, category
   (`auth|injection|ssrf|supply-chain|secrets|cve|container|iac|crypto|memory|functional-regression|other`),
-  detected-by (`manual|semgrep|trivy|commit-review|...`), signals (e.g. `Security, Validated, Patch
-  generated, Attack-path`), resolution if applicable. In commit-history review, `Commit` is the commit
-  that introduced the issue; `Fixed in commit` is the later commit that remediated it, if already fixed.
+  standards mapping (`ASVS vX.Y.Z-...`, `OWASP APIx:YYYY`, `CWE-...`, `NIST SSDF ...`, `SLSA`/Scorecard
+  where applicable), detected-by (`manual|semgrep|trivy|commit-review|...`), signals (e.g. `Security,
+  Validated, Patch generated, Attack-path`), resolution if applicable. In commit-history review, `Commit`
+  is the commit that introduced the issue; `Fixed in commit` is the later commit that remediated it, if
+  already fixed.
 - **# Summary:** plain-language description of the bug, the root cause, *and* the fix direction, in a
   few sentences. A reader should understand the whole thing from this alone.
 - **# Validation:** the `## Rubric` checkboxes you confirmed, then a `## Report` paragraph describing how
-  you validated (dynamic PoC output, or why you used code review), with environment caveats. Link to
+  you validated (dynamic PoC output, or why you used code review), with environment caveats. Include
+  `## Negative evidence / false-positive checks` and `## Revalidation after fix`. Link to
   `.security/validation/SEC-NNN/`.
 - **# Evidence:** the minimal code excerpts (`path (Lstart to Lend)`) with a one-line note above each
   explaining what it shows. Keep excerpts short — enough to prove the point, not whole files. Reference
@@ -131,8 +140,8 @@ One file per finding at `.security/findings/SEC-NNN-<slug>.md`, following `asset
   the finding; do not create a separate patch artifact. Propose only — never apply during the scan.
 - **# Attack-path analysis:** `Final | Decider | Matrix severity | Policy adjusted`, then `## Rationale`,
   `## Likelihood`, `## Impact`, `## Assumptions`, `## Path` (one-line arrow chain), `## Path evidence`
-  (`path:line` per hop), `## Narrative`, `## Controls` (what's missing), `## Blindspots` (what you
-  couldn't fully verify). This block is what lets a reviewer trust the severity.
+  (`path:line` per hop), `## Narrative`, `## Controls` (what's missing), `## Patch regression risk`,
+  `## Blindspots` (what you couldn't fully verify). This block is what lets a reviewer trust the severity.
 
 ## Finding numbering and lifecycle
 
@@ -152,6 +161,18 @@ that a later commit already fixed, write the standard finding to `.security/fixe
 <introducing sha>`, `Fixed in commit: <fix sha>`, and `Resolution: fixed`. If the same issue already
 exists in `.security/findings/` or `.security/fixed/`, enrich the existing report with the commit evidence
 instead of creating a duplicate.
+
+Do not use alternate metadata keys for historical reports. Fixed reports must still use the same header,
+`# Metadata`, `Criticality`, `Commit`, `Fixed in commit`, `Category`, `Detected by`, and `Resolution`
+fields as open findings. `Commit` is the introducing commit in commit-history mode; never put the review
+HEAD or `.security` artifact commit there when the actual introducing commit is known. Extra narrative
+about introduction/fix series belongs in `# Summary`, `# Evidence`, or validation text, not in replacement
+keys such as `Introduced:` / `Fixed:`.
+
+Candidate promotion is intentionally broader than final reporting. If a worker reports a broken security,
+billing, resource, or lifecycle invariant, validate and rank it instead of silently dismissing it because
+it is "only" low or informational. Dismiss only with concrete evidence that the invariant still holds in
+the child commit and current/future state.
 
 ## Tool-derived findings
 
@@ -195,6 +216,12 @@ raw scanner output and `scan_manifest.md` are enough.
 ## Dependency / CVE summary
 - <only actionable known-vuln deps, with reachability notes>
 
+## Standards / framework coverage
+- <ASVS/API/CWE/NIST/SLSA/Scorecard mappings used, and notable unmapped areas>
+
+## Supply-chain evidence dossier
+- <SBOM/provenance/attestation/signing/Scorecard-style checks/KEV/VEX status, with output paths>
+
 ## Secrets summary
 - <redacted, location + type only — no values>
 
@@ -212,6 +239,8 @@ raw scanner output and `scan_manifest.md` are enough.
 ## Coverage
 - Scanned: <surfaces / dirs / diff>. Languages: <...>. See scan_manifest.md for tools + commands.
 - Manual review covered: <security-sensitive areas inspected>.
+- DFD/source-sink coverage: <flows, sources, sinks, sanitizers/guards, business invariants reviewed>.
+- Cloud/IaC identity paths: <workload/service account/OIDC -> cloud role -> API actions -> assets reviewed>.
 - Not scanned / out of scope: <...>.
 
 ## Recommended next actions
@@ -245,6 +274,11 @@ If there are no findings, say so clearly and still include coverage, skipped too
 - Languages / package managers: <...>
 - IaC / container / CI files: <...>
 - Auth & secret surfaces, public entry points reviewed: <...>
+- DFD/source-sink inventory reviewed: <flows/sources/sinks/guards, custom scanner modeling gaps>.
+- Business invariants reviewed: <tenant isolation, billing/resource accounting, quotas, workflow state,
+  idempotency, lifecycle cleanup>.
+- Supply-chain evidence dossier: <SBOM/provenance/attestation/signing/Scorecard-style checks/KEV/VEX>.
+- Cloud/IaC identity paths: <workload identities, OIDC principals, roles, effective permissions, assets>.
 - Commit history review: <range, count reviewed/skipped, latest cursor, progress file path>.
 - Any project-code-executing commands run (and why): <... or "none">
 ```

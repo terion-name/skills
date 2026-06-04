@@ -50,6 +50,26 @@ The moment dev/CI surface produces an artifact users execute, it's security-crit
 - Workflow permissions least-privilege; no `write-all` token by default.
 - Container base images pinned by digest; multi-stage builds so secrets/build tools don't ship in the
   final image.
+- Provenance/attestation: release artifacts have verifiable provenance (who built what, from which source,
+  with which builder) and consumers/installers can verify it. Record missing provenance as a supply-chain
+  evidence gap even if it is not a standalone vulnerability.
+- SBOM/VEX/KEV: generate or locate SBOMs where possible; for known vulnerable components, record
+  reachability, whether a VEX/advisory says affected or not affected, and whether the CVE appears in
+  CISA Known Exploited Vulnerabilities (KEV). KEV + reachable production path raises priority.
+
+## Supply-chain evidence dossier
+
+For full audits and release-sensitive repos, add a concise dossier to `.security/scan_manifest.md` or
+`.security/report.md`:
+
+- SBOM generated/found (`syft`, ecosystem lockfile parser, provider artifact metadata) and output path.
+- SCA results with reachable/high-priority CVEs, KEV status, and VEX/advisory status when available.
+- SLSA/provenance status: attestation present, builder identity, source ref, artifact digest, verification
+  command or why unavailable.
+- OpenSSF Scorecard-style checks: pinned dependencies/actions, SAST present, dependency update tooling,
+  branch protection/code review signals, signed releases, token permissions, security policy.
+- CI/CD secret and permission review: PR/fork secret exposure, `pull_request_target`, OIDC trust, deploy
+  credentials, broad write tokens.
 
 ## Privileged install / provisioning
 

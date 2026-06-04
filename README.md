@@ -63,11 +63,11 @@ Core ideas:
 - **Proof stays local and safe**; no external attacks, no secret disclosure, no destructive testing.
 - **Reports are working artifacts**; `.security/` should help the next scan and the remediation pass.
 
-For further details see [docs page](docs/security-review.md)
+For further details see [docs page](docs/security-audit.md)
 
 | Skill | Description |
 |---|---|
-| [`security-review`](skills/security-review/) | Threat-model-driven security review, validation, exploit chaining, and `.security/` reporting |
+| [`security-audit`](skills/security-audit/) | Threat-model-driven security audit, validation, exploit chaining, and `.security/` reporting |
 
 ### API architecture
 
@@ -116,7 +116,7 @@ Upload each skill folder via the Skills UI, or use `npx skills add terion-name/s
 
 Add to `AGENTS.md` in the repo root (project-level) or `~/.codex/instructions.md` (user-level).
 
-For Coder Mux, copy or symlink the files in `agents/` into `.mux/agents/` for project-level agents or `~/.mux/agents/` for global agents. The `Security Officer` agent composes with the `security-review` skill: the agent supplies the runnable persona and guardrails, while the skill supplies the methodology, policy references, tooling guidance, and report formats.
+For Coder Mux, copy or symlink the files in `agents/` into `.mux/agents/` for project-level agents or `~/.mux/agents/` for global agents. The `Security Officer` agent composes with the `security-audit` skill: the agent supplies the runnable persona and guardrails, while the skill supplies the methodology, policy references, tooling guidance, and report formats.
 
 ### Gemini CLI
 

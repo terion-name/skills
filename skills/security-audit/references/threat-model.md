@@ -24,8 +24,10 @@ narrow prompts. A good default set:
    from "untrusted internet input" to code.
 2. **AuthN/AuthZ & identity** — how users authenticate, where authorization is enforced, session/cookie
    handling, IdP/OIDC/SSO config, admin vs. user roles, group/claim mapping.
-3. **Data & external I/O** — datastores, file reads/writes, subprocess/shell execution, outbound HTTP
-   (SSRF surface), serialization/deserialization, message queues, secrets storage.
+3. **Data-flow / source-sink map** — external entities, data stores, data flows, trust-boundary crossings,
+   untrusted sources, dangerous sinks, context-specific sanitizers/guards, file reads/writes,
+   subprocess/shell execution, outbound HTTP (SSRF surface), serialization/deserialization, message
+   queues, secrets storage.
 4. **Privilege & supply chain** — anything that runs as root/admin, installers, downloaded binaries,
    `curl | bash`, release/CI workflows that produce artifacts users execute, container/VM/sandbox config.
 
@@ -68,14 +70,37 @@ trust level:
 The trust-boundary calibration is the most important judgment in the whole scan. A bug behind an
 operator-only boundary and the same bug on the unauthenticated edge differ by two severity classes.
 
-### 3. Attack surface, mitigations, and attacker stories
+### 3. Data-flow, source/sink, and guard inventory
+Use a compact DFD-style table: external entities, processes/services, data stores, data flows, and the
+trust boundary each flow crosses. Then list:
+
+- **Sources:** request bodies/headers, route params, cookies, webhook payloads, queue messages, uploaded
+  files, env/config, database rows controlled by users/operators, CI inputs, container/workload output.
+- **Sinks:** SQL/NoSQL, shell/subprocess, filesystem, template/rendering, deserialization, crypto, HTTP
+  client/proxy, cloud APIs, admin/provider APIs, logs, billing/ledger writes, queue publishes.
+- **Sanitizers/guards:** authz/tenant ownership checks, schema validation, allowlists/blocklists,
+  escaping/encoding, parameterized queries, SSRF DNS/IP pinning, CSRF checks, idempotency keys, rate
+  limits, wallet/entitlement checks, redaction.
+- **Unknown framework modeling:** custom routers, ORMs, RPC layers, template systems, queue contracts, or
+  generated clients that scanners may not understand.
+
+This inventory drives scan partitioning and source-to-sink validation. Missing or ambiguous trust
+boundaries are threat-model findings and should be called out.
+
+### 4. Business invariants and abuse cases
+List domain rules that must hold even when a malicious authenticated user, tenant admin, webhook sender,
+operator, or CI actor uses valid features in unusual order. Include money, credits, quotas, entitlement
+classes, tenant ownership, workflow state machines, retries/idempotency, lifecycle events, and resource
+limits. These invariants must be reviewed in full audits, not only in commit-history mode.
+
+### 5. Attack surface, mitigations, and attacker stories
 Walk each surface (bootstrap/supply-chain, management plane, dynamic workloads, isolation, identity &
 secrets, backups/restore, cluster/network, host/local-user). For each: how an attacker reaches it, what
 mitigations already exist, and a concrete "attacker story" of what would go wrong if a control failed.
 Include an **out-of-scope calibration** paragraph: what is explicitly *not* this project's problem
 (e.g. XSS inside a workload the project merely hosts) so the scan doesn't waste effort or inflate severity.
 
-### 4. Criticality calibration
+### 6. Criticality calibration
 Define, **for this project**, what counts as critical / high / medium / low, with examples drawn from the
 actual surfaces. This is what the severity step in `references/reporting.md` will apply. Anchor it to
 trust boundaries and reachability, not to generic CVSS vibes. Example anchors:

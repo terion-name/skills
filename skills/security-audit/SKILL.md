@@ -1,16 +1,16 @@
 ---
-name: security-review
+name: security-audit
 description: >-
-  Run a thorough, defender-first security review of a codebase, modeled on the Codex/Aardvark
+  Run a thorough, defender-first security audit of a codebase, modeled on the Codex/Aardvark
   pipeline: build/refresh a threat model, scan current code and recent commits for vulnerabilities and
   serious commit-introduced functional regressions, validate findings, chain exploitable issues, rank by
-  severity, and write `.security/` artifacts. Use whenever the user invokes `/security-review`,
-  `/sec-review`, or asks to scan/audit/review code they control for vulnerabilities, CVEs, XSS, SQLi,
-  SSRF, RCE, secrets, memory-safety bugs, threat modeling, PR/diff security review, or asks whether code
-  is safe. Defensive assessment of the user's own codebase only.
+  severity, and write `.security/` artifacts. Use whenever the user invokes `/security-audit`,
+  `/sec-audit`, `/sec-review`, or asks to scan/audit/review code they control for vulnerabilities,
+  CVEs, XSS, SQLi, SSRF, RCE, secrets, memory-safety bugs, threat modeling, PR/diff security review, or
+  asks whether code is safe. Defensive assessment of the user's own codebase only.
 ---
 
-# Security Review
+# Security Audit
 
 A delegate-first security analysis workflow inspired by Codex Security (Aardvark). You act as the
 **orchestrator**: you build a threat model, decompose the attack surface, fan work out to parallel
@@ -112,10 +112,12 @@ except where explicitly allowed below — the point is to preserve your context 
 - **Delegate scanning.** Spawn one sub-agent per partition to run the relevant tools and do semantic
   review against the policy files. Run partitions **in parallel** (`run_in_background: true`, then
   `task_await`) — security scanning is embarrassingly parallel across surfaces.
-- **Delegate commit review.** After the current-HEAD sweep, actively spawn commit-review subagents for
-  the incremental commit flow. Prefer many one-commit subagents over broad queue workers, and require each
-  no-finding result to include the invariants, callers, and future touches it checked. Keep the queue,
-  cursor, progress log, validation, dedupe, and final artifacts with the orchestrator.
+- **Delegate commit review.** After the current-HEAD sweep, immediately continue into commit-review
+  subagents for the incremental commit flow. Prefer many one-commit subagents over broad queue workers,
+  and require each no-finding result to include the invariants, callers, and future touches it checked.
+  Broken-invariant notes such as fail-open guards, billing drift, exposed internals, or unsafe config
+  combinations must be promoted to candidates for validation. Keep the queue, cursor, progress log,
+  validation, dedupe, and final artifacts with the orchestrator.
 - **You own validation and severity.** Reproduction judgment, severity calibration, and exploit chaining
   stay with you (the orchestrator), because they require the whole-repo picture the sub-agents lack.
   You may run targeted `bash` here (run a tool, execute a PoC in the sandbox, build the project).
@@ -146,8 +148,9 @@ Read `references/threat-model.md`, then:
   stale, or that the current diff obviously changes.
 - If it does **not** exist, build it now. Run `scripts/init_security.sh` to scaffold the `.security/`
   directory, then spawn 2–4 `explore` sub-agents in parallel to map the architecture (entry points,
-  auth, data stores, external I/O, privileged operations, build/release/supply-chain). Synthesize their
-  reports into `.security/threat_model.md` using `assets/threat_model_template.md`.
+  auth, DFD/source-sink flows, data stores, external I/O, privileged operations, build/release/
+  supply-chain). Synthesize their reports into `.security/threat_model.md` using
+  `assets/threat_model_template.md`.
 
 The threat model is what makes the rest of the scan *prioritized* rather than a flat checklist — it
 tells you which surfaces are internet-reachable, what's trusted, and what "critical" means for *this*
@@ -164,9 +167,10 @@ Decide the scan target with the user's intent:
 - **Targeted:** a subtree or component the user named.
 
 Then **partition for parallelism**. Good partition axes: by attack surface (HTTP handlers, auth, file
-I/O, deserialization, subprocess/shell, crypto, IPC), by top-level directory/service, or by language.
-Each partition becomes one scan sub-agent. Maximize independent-batch size; partitions rarely depend on
-each other, so default to running them all at once.
+I/O, deserialization, subprocess/shell, crypto, IPC), by DFD flow / trust-boundary crossing, by business
+invariant (tenant isolation, billing/resource accounting, workflow state), by top-level directory/service,
+or by language. Each partition becomes one scan sub-agent. Maximize independent-batch size; partitions
+rarely depend on each other, so default to running them all at once.
 
 ## Step 3 — Scan (parallel fan-out)
 
@@ -182,6 +186,9 @@ deterministic tooling catch different bugs:
 2. **Semantic review** against the relevant policy file(s) in `references/policies/`. These encode the
    strict rules per language/surface (injection, XSS, SSRF, deserialization, auth/IDOR, memory safety,
    secrets, IaC, etc.) with the dangerous patterns and the sinks to grep for.
+3. **Business-invariant review** for full audits: money/credits, quotas, tenant boundaries, authorization
+   scopes, workflow state machines, idempotency/replay, lifecycle events, and resource accounting. Do this
+   even when there is no commit diff; scanners rarely find these.
 
 Sub-agents return **candidate findings** (suspected, not yet validated), each with: title, location
 (`path:line`), the vulnerability class, a one-line why, and the data/control flow from source to sink.
@@ -201,10 +208,16 @@ They do **not** assign final severity — that's your job after validation and c
      candidate finding; do not write Markdown summaries in .security/tool-results/.
   2. Semantically review the code against references/policies/<relevant>.md. Look specifically for the
      sink patterns and dangerous APIs listed there.
-  3. For each suspected issue, trace source -> sink and confirm it against the actual code (no tool-only findings).
-  4. Record tools run/skipped (+ versions, commands, exit codes, why-skipped) for the manifest.
+  3. Build a small source/sink/guard table for this partition: untrusted sources, dangerous sinks,
+     propagators, sanitizers/guards, and scanner modeling gaps. Use it to drive review.
+  4. Review relevant business invariants from the threat model (tenant isolation, billing/resource
+     accounting, workflow state, idempotency/replay, lifecycle cleanup).
+  5. For each suspected issue, trace source -> sink or invariant break and confirm it against the actual
+     code (no tool-only findings).
+  6. Record tools run/skipped (+ versions, commands, exit codes, why-skipped) for the manifest.
 - Report back: a list of CANDIDATE findings. Each = {title, path:line, vuln_class, one_line_why,
-  source_to_sink_flow, supporting evidence snippets}. Mark anything you could not confirm as "needs validation".
+  source_to_sink_flow_or_broken_invariant, standards_mapping_if_obvious, supporting evidence snippets}.
+  Mark anything you could not confirm as "needs validation".
 - Do NOT assign final severity, do NOT chain exploits, do NOT patch. Keep scope to this partition.
 - Constraints: read-only review + running scanners only; do not modify code; PoC only inside the sandbox if trivially safe.
 ```
@@ -259,15 +272,17 @@ Write artifacts (read `references/reporting.md` for the exact templates, and use
   actionable, with reachability), redacted secrets summary, false positives considered, tool + manual
   coverage, recommended next actions, and blindspots / what wasn't scanned.
 
-Finish with a short chat summary: counts by severity, the top one or two attack paths in plain language,
-and the single highest-leverage fix. Keep logs out of chat — point to the files. Do **not** auto-apply
-any patch.
+Do not stop here when commit history is in scope. The current-HEAD report is an interim checkpoint; keep
+going into Step 7 in the same run unless the user explicitly scoped the audit to current HEAD / a single
+diff / a subtree, or explicitly told you to stop before history review. Do **not** auto-apply any patch.
 
 ## Step 7 — Commit history review
 
-After the current-HEAD sweep and initial report, read `references/commit-history-review.md` and run the
-incremental per-commit flow unless the user explicitly scoped the request to a single diff/PR or subtree.
-This flow looks for security issues and serious functional regressions introduced by individual commits.
+After the current-HEAD sweep and interim report, read `references/commit-history-review.md` and run the
+incremental per-commit flow immediately unless the user explicitly scoped the request to current HEAD, a
+single diff/PR, or a subtree. Do not merely write a queued backlog and stop; creating
+`.security/commit_review_progress.md` is the start of the history pass, not a completion point. This flow
+looks for security issues and serious functional regressions introduced by individual commits.
 
 Use `.security/latest_reviewed_commit` as the durable cursor. On the first run, review commits from the
 last 2 months, capped at 1000 commits. On later runs, review commits after the cursor through `HEAD`.
@@ -292,6 +307,12 @@ write to `.security/findings/` if still present; write to `.security/fixed/` wit
 <sha>` if a later commit already fixed it. After the per-commit pass, update `.security/report.md` and
 `.security/scan_manifest.md` with commit-review coverage, skipped commits, new/enriched findings, and
 the latest cursor.
+
+Only after Step 7 is complete or explicitly out of scope, finish with a short chat summary: counts by
+severity, the top one or two attack paths in plain language, the highest-leverage fix, and the commit
+history cursor/coverage. Keep logs out of chat; point to the files. If findings exist, include a short
+"Upload findings" note with user-run commands for GitHub/GitLab/Plane or point to the uploader `--help`;
+do not run those scripts unless the upload rule below was satisfied.
 
 ## `.security/` layout
 
@@ -319,6 +340,43 @@ Keep `threat_model.md`, `latest_reviewed_commit`, `commit_review_progress.md`, `
 (later scans get faster by focusing on new commits, like Codex incremental scans). Raw files in
 `tool-results/` and bulky `validation/` artifacts can be gitignored if noisy.
 
+## Upload findings to issue trackers
+
+Use the bundled upload scripts when the user wants to create tracker issues from `.security/findings/`
+without exposing an airgapped GitHub Enterprise, GitLab, or Plane service to the agent. The scripts run
+where the user has network access, read the provider token from an environment variable, parse findings
+deterministically, and upload each matching finding as one issue/work item. They do not upload raw
+`.security/tool-results/`.
+
+Default behavior: **do not run upload scripts after an audit.** At the end of a security audit, if
+findings exist, print concise user-run instructions and point to each script's `--help`. This keeps
+airgapped or self-hosted issue trackers under the user's control.
+
+Only run an upload script yourself when the user's **initial audit prompt** explicitly asks to upload
+findings and provides the required arguments for the chosen provider (for example provider, project id,
+host/workspace when needed, label/issue type if desired, and token env var if not using the default).
+If upload was requested later as a separate follow-up, treat it as a separate task and run only the
+specific requested script. Never guess a project id, host, workspace, issue type, or token env var.
+
+Common options:
+
+```bash
+scripts/upload_findings_github.py --project-id owner/repo --label security --finding-index-from 12
+scripts/upload_findings_gitlab.py --project-id group/project --host https://gitlab.example.com --label security
+scripts/upload_findings_plane.py --project-id workspace-slug/project-uuid --host https://plane.example.com --label security --issue-type "Security Finding"
+```
+
+- `--project-id`: GitHub `owner/repo`; GitLab numeric ID or URL-encoded path input (`group/project` is encoded by the script); Plane `project_uuid` plus `--workspace-slug`, or `workspace_slug/project_uuid`.
+- `--host`: optional provider base URL for self-hosted GitLab or Plane; GitHub Enterprise hosts are converted to `/api/v3`.
+- `--finding-index-from`: optional first `SEC-NNN` index to upload.
+- `--label`: optional label; scripts create it if missing.
+- `--issue-type`: Plane-only work item type; created if missing. The Plane script also creates custom properties mirroring the security finding template (`SEC ID`, `Severity`, `Status`, `Category`, `Standards`, `Commit`, `Fixed in commit`, `Resolution`, `Location`, `Detected by`, `Finding path`) and fills them deterministically.
+- `--api-key-env-name`: optional token env var, defaulting to `GITHUB_API_KEY`, `GITLAB_API_KEY`, or `PLANE_API_KEY`.
+- `--include-fixed`: also upload `.security/fixed/` historical findings.
+- `--dry-run`: parse and print planned uploads without API writes.
+- Each uploader has detailed help and examples: `scripts/upload_findings_github.py --help`,
+  `scripts/upload_findings_gitlab.py --help`, `scripts/upload_findings_plane.py --help`.
+
 ## Reference map
 
 - `references/threat-model.md` — how to build/refresh the threat model; format and what each section must cover.
@@ -343,3 +401,5 @@ Keep `threat_model.md`, `latest_reviewed_commit`, `commit_review_progress.md`, `
 - `assets/example_finding.md`, `assets/example_threat_model.md` — anonymized, fully worked examples
   showing the target shape and quality bar. Read these to calibrate voice and depth before writing your own.
 - `scripts/init_security.sh` — scaffold the `.security/` directory.
+- `scripts/upload_findings_github.py`, `scripts/upload_findings_gitlab.py`, `scripts/upload_findings_plane.py` —
+  upload parsed findings to issue trackers from a user-controlled network environment.

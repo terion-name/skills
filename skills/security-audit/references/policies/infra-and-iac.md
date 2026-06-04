@@ -32,6 +32,10 @@ lives here. Read alongside `secrets-and-supply-chain.md`.
   DB ports, admin UIs); public S3/blob buckets; public DB instances.
 - **IAM:** wildcard `Action: "*"` / `Resource: "*"`, `iam:PassRole` to broad principals, overly-trusting
   assume-role policies, long-lived access keys vs. roles.
+- **Effective identity paths:** trace workload identity → service account/OIDC principal → cloud role →
+  allowed API actions → terminal asset. Findings should describe the actual permission path, not just a
+  broad-policy smell. Check metadata-service credential theft paths, role chaining, workload identity
+  federation, cross-account trust, and whether network/SSRF findings can reach those credentials.
 - **Encryption / logging:** unencrypted storage/volumes/snapshots; disabled audit logging (CloudTrail/
   flow logs); public AMIs/snapshots.
 - **State & secrets:** secrets in `.tf`/variables/state committed; remote state unencrypted or world-readable.
@@ -68,3 +72,7 @@ to these → RCE, the example finding's terminal impact).
 
 `checkov -d .`, `trivy config .` / `tfsec`, `hadolint Dockerfile`, `kubesec`/`kube-score`, `trivy image`
 for built images. Confirm every hit against the actual manifest and the deployment's real exposure.
+
+For cloud/container attack paths, cross-check against the threat model's identity path inventory and map
+techniques where useful (for example cloud metadata credentials, cloud service discovery, poisoned CI
+pipeline execution, container escape, host namespace sharing, and lateral movement through cluster roles).

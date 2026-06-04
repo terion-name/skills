@@ -6,7 +6,7 @@ Security review has a failure mode that looks a lot like bad AI code review: the
 
 AI agents make this worse when they treat security as a checklist. They know the vocabulary: XSS, SSRF, SQL injection, secrets, CVEs, deserialization, IAM, container escape. Left unguided, they can produce a report that sounds like a security audit but has no threat model, no reachability analysis, no proof, and no clear next move.
 
-The `security-review` skill exists to force a better shape:
+The `security-audit` skill exists to force a better shape:
 
 **Threat model first.** Before looking for bugs, the agent has to identify assets, trust boundaries, entry points, privileged sinks, assumptions, and what "critical" means for this repository.
 
@@ -36,7 +36,7 @@ Core positions:
 
 ## The approach
 
-The scan follows six stages.
+The audit follows seven stages.
 
 **Threat model.** Create or refresh `.security/threat_model.md`: overview, assets, trust boundaries, entry points, privileged operations, security controls, assumptions, attack-surface map, criticality calibration, and review priorities.
 
@@ -49,6 +49,8 @@ The scan follows six stages.
 **Severity and chaining.** Rate likelihood and impact under the repository threat model. Then look across findings for kill chains: a medium auth bypass plus a medium object access bug plus a dangerous sink may be a high or critical attack path together.
 
 **Report.** Write one file per finding, a scan manifest, and a summary report. Findings include evidence, validation, impact, likelihood, remediation, false-positive checks, and optionally a suggested patch. The skill proposes patches but does not apply them unless the user asks for remediation afterward.
+
+**Commit history.** After the current-HEAD sweep, continue into the incremental per-commit pass unless the user explicitly scoped it out. Review the first-run two-month/1000-commit window, then advance the durable cursor after each commit is assessed or skipped.
 
 ## What good output looks like
 
@@ -70,10 +72,10 @@ The useful standard is narrower: fewer scanner-only false positives, fewer misse
 
 ## Reference map
 
-- [`skills/security-review/SKILL.md`](../skills/security-review/SKILL.md) — the main workflow and trigger description.
-- [`references/threat-model.md`](../skills/security-review/references/threat-model.md) — how to build and refresh the repository threat model.
-- [`references/tooling.md`](../skills/security-review/references/tooling.md) — scanner choices, commands, ecosystem notes, and offline fallbacks.
-- [`references/reporting.md`](../skills/security-review/references/reporting.md) — validation, severity, exploit chaining, and report format.
-- [`references/policies/`](../skills/security-review/references/policies/) — web/API, language, infrastructure, secrets, supply-chain, and memory-safety review policies.
-- [`assets/`](../skills/security-review/assets/) — templates and worked examples for threat models and findings.
-- [`scripts/init_security.sh`](../skills/security-review/scripts/init_security.sh) — helper to scaffold `.security/`.
+- [`skills/security-audit/SKILL.md`](../skills/security-audit/SKILL.md) — the main workflow and trigger description.
+- [`references/threat-model.md`](../skills/security-audit/references/threat-model.md) — how to build and refresh the repository threat model.
+- [`references/tooling.md`](../skills/security-audit/references/tooling.md) — scanner choices, commands, ecosystem notes, and offline fallbacks.
+- [`references/reporting.md`](../skills/security-audit/references/reporting.md) — validation, severity, exploit chaining, and report format.
+- [`references/policies/`](../skills/security-audit/references/policies/) — web/API, language, infrastructure, secrets, supply-chain, and memory-safety review policies.
+- [`assets/`](../skills/security-audit/assets/) — templates and worked examples for threat models and findings.
+- [`scripts/init_security.sh`](../skills/security-audit/scripts/init_security.sh) — helper to scaffold `.security/`.
