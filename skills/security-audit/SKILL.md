@@ -163,6 +163,9 @@ except where explicitly allowed below — the point is to preserve your context 
   gate passes. If history was in scope, `.security/latest_reviewed_commit` must reach the audited `HEAD`.
   If `.security/tool-results/` contains scanner output, `.security/tool_triage.md` must account for every
   raw result file and every CVE/GHSA/advisory ID as a finding, explicit dismissal, or blocked validation.
+  `candidate` is an intermediate triage decision, not a final state; before completion, every candidate
+  from tools must be promoted to a normal `findings/SEC-NNN-*.md` or `fixed/SEC-NNN-*.md` report,
+  dismissed with concrete evidence, or marked blocked with the missing evidence source.
 
 ## Prerequisites
 
@@ -277,6 +280,8 @@ tool file or advisory ID is missing.
   3. For each SCA advisory/CVE/GHSA/ecosystem advisory, determine package, version, fixed version,
      dependency scope, runtime/deployment evidence, and decision.
   4. Promote production/runtime advisories with reachable or not-disproven reachability to candidate findings.
+     Related advisories may be grouped into one coherent dependency finding by package/service/root cause,
+     but the finding must list the advisory IDs and affected runtime evidence.
   5. Dismiss only with concrete evidence: dev-only, test-only, not installed, not packaged, unreachable,
      fixed by current lockfile, scanner false positive, or validation blocked.
 - Report back: tool_triage rows plus candidate findings. Do not assign final SEC IDs or final severity.
@@ -320,7 +325,10 @@ This is the step that separates a real finding from scanner noise — Codex's co
 First, finish delegated tool triage. `.security/tool_triage.md` is mandatory whenever
 `.security/tool-results/` contains output. Tool-triage sub-agents must account for each scanner output
 file and each dependency advisory from Trivy/Grype/OSV/Dependency-Check/dep-scan/npm/pnpm/yarn/etc. The
-orchestrator merges their rows and checks coverage; it does not inspect raw tool output itself.
+orchestrator merges their rows and checks coverage; it does not inspect raw tool output itself. Tool
+triage may use `candidate` while validation is still running, but the final audit must not leave
+`candidate` rows unresolved. Actionable tool findings are normal SEC reports, not separate Markdown
+reports in `tool-results/` or a bucket of "follow-up" CVEs in the summary.
 
 Then validate candidates through validation sub-agents (prioritize the scariest first):
 
@@ -406,9 +414,10 @@ single diff/PR, or a subtree. Do not merely write a queued backlog and stop; cre
 looks for security issues and serious functional regressions introduced by individual commits.
 
 Use `.security/latest_reviewed_commit` as the durable cursor only if it exists in the current worktree and
-is non-empty. If it is deleted or absent, treat this as a first run: review commits from the last 2
-months, capped at 1000 commits. On later runs, review commits after the cursor through `HEAD`. Always
-process oldest to newest. Do not recover a deleted cursor from git history.
+is non-empty. If it is deleted or absent, treat this as a first run: review the union of commits reachable
+from the target HEAD that are either in the latest 1000 commits or are dated within the last 2 calendar
+months. On later runs, review commits after the cursor through `HEAD`. Always process oldest to newest.
+Do not recover a deleted cursor from git history.
 
 Actively use subagents and keep durable progress:
 
@@ -417,6 +426,9 @@ Actively use subagents and keep durable progress:
   `.security/commit_review_progress.md`, `.security/commit_review_ledger.jsonl`, and
   `.security/commit-reviews/<sha>.md` as each commit is actually assessed so a resumed agent can continue
   without relying on chat context.
+- The queue is immutable once written for that pass. Do not shrink, renormalize, or drop old queue entries
+  because wall-clock time moved during a long run. If HEAD changes, finish the queued target HEAD first or
+  create a new explicit follow-up queue after recording the previous pass state.
 - Spawn commit-review subagents in background batches. Scope each subagent to one commit unless a tiny
   run of related commits is safer as a small batch.
 - For each commit, first decide whether it is obviously non-functional. Skip docs-only, formatting-only,
@@ -457,6 +469,7 @@ If the gate fails, do **not** report the audit as complete. Fix the missing work
   do not synthesize delegation rows for work done in the main context.
 - If tool outputs are untriaged, finish `.security/tool_triage.md`; create findings for actionable or
   not-disproven production CVEs, and record evidence-backed dismissals for non-actionable advisories.
+  Do not leave unresolved `candidate` decisions in `.security/tool_triage.md`.
 - If a required artifact is missing, write it.
 
 Only after the gate passes, finish with a short chat summary: counts by severity, the top one or two
@@ -491,6 +504,7 @@ with the Security Officer agent" below):
 ├── fixed/
 │   └── SEC-NNN-slug.md        # fixed findings moved here; IDs stay reserved for future scans
 ├── tool-results/              # raw scanner output only; actionable hits become normal findings
+├── tool-cache/                # scanner DB/cache mounts; gitignored
 └── validation/
 │   └── SEC-NNN/               # repro notes, commands, captured output/artifacts per finding
 ```
@@ -500,6 +514,7 @@ Keep `threat_model.md`, `latest_reviewed_commit`, `commit_review_progress.md`, `
 (later scans get faster by focusing on new commits, like Codex incremental scans). If the user deletes
 those tracked artifacts in the worktree, respect that as a reset and start from the files that remain.
 Raw files in `tool-results/` and bulky `validation/` artifacts can be gitignored if noisy.
+`tool-cache/` should always be gitignored; it is scanner cache/database state, not audit evidence.
 
 ## Upload findings to issue trackers
 

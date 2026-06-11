@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT="${1:-.}"
 SEC_DIR="$ROOT/.security"
 
-mkdir -p "$SEC_DIR/findings" "$SEC_DIR/fixed" "$SEC_DIR/tool-results" "$SEC_DIR/validation" "$SEC_DIR/commit-reviews"
+mkdir -p "$SEC_DIR/findings" "$SEC_DIR/fixed" "$SEC_DIR/tool-results" "$SEC_DIR/tool-cache" "$SEC_DIR/validation" "$SEC_DIR/commit-reviews"
 
 # .gitignore inside .security/ so noisy raw tool output isn't committed,
 # but threat model, findings, fixed findings, manifest, tool triage, completion gate, and summary report are.
@@ -14,6 +14,7 @@ if [ ! -f "$SEC_DIR/.gitignore" ]; then
   cat > "$SEC_DIR/.gitignore" <<'EOF'
 # Raw scanner output and bulky repro artifacts are evidence/scratch — keep locally by default.
 tool-results/
+tool-cache/
 validation/
 EOF
 fi
@@ -32,6 +33,7 @@ echo "       commit_review_ledger.jsonl + commit-reviews/ -> one auditable decis
 echo "       findings/     -> one finding per file (SEC-NNN-slug.md), chronological IDs"
 echo "       fixed/        -> remediated findings moved here, keeping original SEC-NNN IDs"
 echo "       tool-results/ -> raw scanner output only (gitignored)"
+echo "       tool-cache/   -> scanner DB/cache mounts (gitignored)"
 echo "       validation/   -> repro notes/commands/output per finding, SEC-NNN/ (gitignored)"
 echo "       tool_triage.md -> every tool output/advisory mapped to finding/dismissal/blocker"
 echo "       delegation_log.jsonl -> one record per sub-agent task/output"

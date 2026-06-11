@@ -59,6 +59,9 @@ Unless the task says otherwise:
 - Save raw scanner outputs only under `.security/tool-results/`; actionable tool hits become normal finding files.
 - Save `.security/tool_triage.md`; every raw tool output and dependency advisory must be mapped to a
   finding, explicit dismissal, or blocker.
+- Treat tool-triage `candidate` as temporary; before reporting completion, every candidate must be
+  promoted to a normal `.security/findings/SEC-NNN-*.md` or `.security/fixed/SEC-NNN-*.md` report,
+  dismissed with concrete evidence, or marked blocked with the missing evidence source.
 - Save the final scan report to `.security/report.md`.
 - Save validation notes and proof artifacts under `.security/validation/`.
 - Run the per-commit history review after the current-HEAD sweep unless the delegated task explicitly
@@ -78,6 +81,8 @@ Unless the task says otherwise:
 - **Do not bury the user in raw tool output.** Preserve raw outputs in `.security/tool-results/`, but report only triaged, security-relevant findings.
 - **Do not leave tool output untriaged.** If SCA tools report CVEs/GHSAs/advisories in production or
   runtime dependencies, create findings unless concrete reachability/package evidence dismisses them.
+  Related advisories may be grouped into one actionable dependency finding by runtime package/service/root
+  cause, but unresolved `candidate` rows are not an acceptable final state.
 - **Do not scan session/internal agent storage.** Never read or scan `~/.mux/sessions/**`, `.git/objects/**` directly, temporary agent patch storage, or unrelated system directories.
 - **Do not upload proprietary code to SaaS tools** unless the repository is already configured for that service or the user explicitly asks. Prefer local/offline scanner modes and note tools that download rule or vulnerability databases.
 - **Respect `.security/` worktree resets.** Only `.security/**` files that exist in the current worktree
@@ -400,8 +405,9 @@ If there are no validated findings, say so clearly and still include coverage, s
 ### 9. Run commit history review
 
 After the current-HEAD sweep and interim report, review commit history unless the task explicitly scoped
-the audit to current HEAD, a PR/diff, or a subtree. On a fresh state, review commits from the last 2
-months capped at 1000 commits, oldest to newest. Before review, write
+the audit to current HEAD, a PR/diff, or a subtree. On a fresh state, review the union of commits
+reachable from the target HEAD that are either in the latest 1000 commits or dated within the last
+2 calendar months, oldest to newest. Before review, write
 `.security/commit_review_start_cursor`, `.security/commit_review_target_head`, and
 `.security/commit_review_queue.txt`. For each commit, write a detailed
 `.security/commit-reviews/<sha>.md` note, append a JSON object to `.security/commit_review_ledger.jsonl`,
@@ -414,6 +420,10 @@ touches auth, tenant isolation, billing, proxy/egress, secrets, lifecycle, CI/re
 dependency locks, or public response shapes, trace affected callers/invariants before marking no finding.
 Do not bulk-generate ledger rows. If the run cannot finish, leave the cursor at the last actually
 reviewed commit and report history review in progress.
+
+The commit queue is immutable for the pass. Do not shrink or renormalize it because wall-clock time moves
+during a long audit. If HEAD changes, finish the current target queue first or create an explicit
+follow-up queue after recording the current pass.
 
 ### 10. Run completion gate
 

@@ -192,6 +192,19 @@ format above. Set `Detected by` to the tool name (for example `semgrep`, `trivy`
 `osv-scanner`, `dependency-check`, or `gitleaks`) and link the raw output path in `# Evidence` or
 `# Validation`.
 
+`candidate` is only an in-flight triage state. A completed audit must not leave tool-triage candidates
+unresolved. Before the completion gate can pass, every tool-derived candidate must become one of:
+
+- `finding:SEC-NNN` or a linked `.security/fixed/SEC-NNN-*.md` report using the standard finding format
+- `dismissed:<reason>` with concrete code/package/deployment evidence
+- `blocked:<reason>` with the missing evidence source and a follow-up command or condition
+
+For dependency/SCA output, do not create one noisy report per advisory when several advisories share the
+same runtime package, service, and remediation. Group related CVEs/GHSAs into a coherent dependency
+finding by affected package/service/runtime image, list every advisory ID in Evidence, and include fixed
+versions and reachability notes. Conversely, do not collapse unrelated packages into a vague "many CVEs"
+finding; the remediation owner must be able to act from the report.
+
 Tool triage must include:
 
 - one row per raw output file under `.security/tool-results/`, including scanner failures and partial
@@ -211,6 +224,10 @@ the package is not deployed.
 Do not write Markdown summaries under `.security/tool-results/`. Dismissed tool hits belong in
 `.security/report.md` under "Considered and dismissed" when they are relevant to coverage; otherwise the
 raw scanner output, `.security/tool_triage.md`, and `scan_manifest.md` are enough.
+
+The summary's finding counts must match the filesystem. If `.security/report.md` says "53 open findings"
+while `.security/findings/` contains 54 reports, the audit is not ready to call complete; fix the report
+or the misplaced file first.
 
 `.security/tool_triage.md` format:
 

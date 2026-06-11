@@ -1,5 +1,8 @@
 # What this skill is, and why it exists
 
+> [!WARNING]
+> This skill is VERY expensive to run! On big projects with gpt-5.5-xhigh it can easily burn several **billions** of tokens and run for 3-5 days. Be causious. It really has sense to run with top-tier subscription plans
+
 ## The problem
 
 Security review has a failure mode that looks a lot like bad AI code review: the output is plausible, voluminous, and only partly useful. A scanner finds a hundred things. Some are real. Some are development-only. Some are unreachable. Some matter only if three unrelated assumptions are true. The human still has to do the hard work: decide what the system protects, trace attacker-controlled input, validate the path, and explain which fixes actually reduce risk.
@@ -36,7 +39,11 @@ Core positions:
 
 ## The approach
 
-The audit follows seven stages.
+The audit follows eight stages.
+
+**Tooling preflight.** Before threat modeling or scans, prove whether Docker-based scanner containers are
+available. If Docker or required scanner images/DBs are unavailable, the audit stops unless the user
+explicitly approves degraded local-only coverage.
 
 **Threat model.** Create or refresh `.security/threat_model.md`: overview, assets, trust boundaries, entry points, privileged operations, security controls, assumptions, attack-surface map, criticality calibration, and review priorities.
 
@@ -50,7 +57,7 @@ The audit follows seven stages.
 
 **Report.** Write one file per finding, a scan manifest, and a summary report. Findings include evidence, validation, impact, likelihood, remediation, false-positive checks, and optionally a suggested patch. The skill proposes patches but does not apply them unless the user asks for remediation afterward.
 
-**Commit history.** After the current-HEAD sweep, continue into the incremental per-commit pass unless the user explicitly scoped it out. Review the first-run two-month/1000-commit window, then advance the durable cursor after each commit is assessed or skipped.
+**Commit history.** After the current-HEAD sweep, continue into the incremental per-commit pass unless the user explicitly scoped it out. On a first run, review the union of the latest 1000 commits and commits from the last two calendar months, then advance the durable cursor only after each commit is assessed or skipped.
 
 ## What good output looks like
 

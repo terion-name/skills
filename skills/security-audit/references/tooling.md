@@ -2,8 +2,10 @@
 
 Deterministic tools and semantic LLM review catch different bugs — run both. Tools give broad, repeatable
 coverage and find known-CVE dependencies and obvious sink patterns fast; semantic review (against
-`policies/*`) finds logic, authz, and chained issues tools miss. **A tool hit is a candidate, never a
-finding** — always confirm it against real code and validate before reporting.
+`policies/*`) finds logic, authz, and chained issues tools miss. **A tool hit is a candidate first, not
+an automatic finding** — always confirm it against real code and validate before reporting. In the final
+audit, no tool-derived candidate may remain unresolved: promote it to a standard SEC finding/fixed report,
+dismiss it with evidence, or mark validation blocked.
 
 Sub-agents run these per partition and save raw output under `.security/tool-results/` (one file per
 tool, JSON/SARIF where supported). If a tool reports hits, triage them against code and turn confirmed

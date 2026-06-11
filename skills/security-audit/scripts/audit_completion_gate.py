@@ -66,6 +66,24 @@ def read_text(path: Path, max_bytes: int = 10_000_000) -> str:
     return data.decode("utf-8", errors="ignore")
 
 
+def git_first_run_queue(repo: Path, target_head: str) -> list[str] | None:
+    """Return the target-anchored first-run queue.
+
+    First-run coverage is the union of commits from the last two calendar
+    months and the latest 1000 commits reachable from the target head, ordered
+    oldest to newest. This intentionally is not "last two months capped at
+    1000"; dense repositories still get the latest 1000 commits.
+    """
+
+    recent_1000 = git_commit_list(repo, ["rev-list", "--max-count=1000", target_head])
+    last_two_months = git_commit_list(repo, ["log", "--since=2 months ago", "--format=%H", target_head])
+    ordered = git_commit_list(repo, ["rev-list", "--reverse", target_head])
+    if recent_1000 is None or last_two_months is None or ordered is None:
+        return None
+    wanted = set(recent_1000) | set(last_two_months)
+    return [sha for sha in ordered if sha in wanted]
+
+
 def iter_tool_files(tool_results: Path) -> list[Path]:
     if not tool_results.exists():
         return []
@@ -124,8 +142,7 @@ def validate_history_ledger(repo: Path, security_dir: Path, head: str | None) ->
     expected: list[str] | None = None
     if target_head and start_cursor:
         if start_cursor in {"FIRST_RUN", "first-run", "none", "NONE", "-"}:
-            all_recent = git_commit_list(repo, ["log", "--since=2 months ago", "--format=%H", "--reverse"])
-            expected = all_recent[-1000:] if all_recent is not None else None
+            expected = git_first_run_queue(repo, target_head)
         else:
             expected = git_commit_list(repo, ["rev-list", "--reverse", f"{start_cursor}..{target_head}"])
         if expected is None:
@@ -299,6 +316,57 @@ def validate_delegation_log(security_dir: Path, *, history_required: bool, tool_
     return errors
 
 
+def validate_report_counts(security_dir: Path) -> list[str]:
+    errors: list[str] = []
+    report = read_text(security_dir / "report.md")
+    if not report:
+        return errors
+
+    open_count = len(list((security_dir / "findings").glob("SEC-*.md")))
+    fixed_count = len(list((security_dir / "fixed").glob("SEC-*.md")))
+
+    open_match = re.search(r"\b(\d+)\s+open\s+findings?\b", report, re.I)
+    if open_match and int(open_match.group(1)) != open_count:
+        errors.append(
+            f"report.md says {open_match.group(1)} open findings, but .security/findings contains {open_count}"
+        )
+
+    fixed_match = re.search(r"\b(\d+)\s+fixed\s+findings?\b", report, re.I)
+    if fixed_match and int(fixed_match.group(1)) != fixed_count:
+        errors.append(
+            f"report.md says {fixed_match.group(1)} fixed findings, but .security/fixed contains {fixed_count}"
+        )
+
+    return errors
+
+
+def validate_tool_triage_final_state(security_dir: Path) -> list[str]:
+    errors: list[str] = []
+    triage = read_text(security_dir / "tool_triage.md")
+    if not triage:
+        return errors
+
+    unresolved: list[str] = []
+    for lineno, line in enumerate(triage.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped.startswith("|") or "candidate" not in stripped.lower():
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        decision_cells = cells[1:] if len(cells) > 1 else cells
+        if any(re.search(r"\bcandidate\b", cell, re.I) for cell in decision_cells):
+            unresolved.append(f"line {lineno}: {stripped[:180]}")
+
+    if unresolved:
+        sample = "; ".join(unresolved[:10])
+        suffix = " ..." if len(unresolved) > 10 else ""
+        errors.append(
+            "tool_triage.md has unresolved candidate decision row(s); promote to SEC finding/fixed, "
+            f"dismiss with evidence, or mark blocked: {sample}{suffix}"
+        )
+
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Check whether a security-audit run is allowed to be called complete.",
@@ -336,6 +404,8 @@ def main() -> int:
     for rel in ["tooling_preflight.md", "threat_model.md", "scan_manifest.md", "report.md"]:
         if not (security_dir / rel).exists():
             errors.append(f"missing required artifact: {security_dir / rel}")
+
+    errors.extend(validate_report_counts(security_dir))
 
     if args.history_required == "yes":
         head = git_head(repo)
@@ -377,6 +447,7 @@ def main() -> int:
 
     if tool_files and not triage_text:
         errors.append("tool-results exist, but .security/tool_triage.md is missing")
+    errors.extend(validate_tool_triage_final_state(security_dir))
 
     unreferenced_files: list[str] = []
     for path in tool_files:

@@ -12,15 +12,22 @@ non-functional commits. Do not recover a deleted cursor from git history; a dele
 the current audit state was reset unless the user explicitly asks to restore old artifacts.
 
 - If the cursor exists on disk and is non-empty, review commits after it through `HEAD`.
-- If the cursor is absent from the worktree or empty, review commits from the last 2 months, capped at
-  1000 commits.
+- If the cursor is absent from the worktree or empty, this is a first run. Review the union of commits
+  reachable from the target HEAD that are either in the latest 1000 commits or dated within the last
+  2 calendar months. This avoids missing dense-history regressions just because the last two months
+  contain fewer than 1000 commits.
 - Always process commits from oldest to newest.
 
 Useful commands:
 
 ```bash
-# First run: last 2 months, cap 1000, oldest first.
-git log --since="2 months ago" --format=%H --reverse | tail -n 1000
+# First run: latest 1000 commits plus commits from the last 2 months, oldest first.
+target="$(git rev-parse HEAD)"
+tmp="$(mktemp)"
+{ git rev-list --max-count=1000 "$target"; git log --since="2 months ago" --format=%H "$target"; } |
+  sort -u > "$tmp"
+git rev-list --reverse "$target" | grep -Fxf "$tmp"
+rm -f "$tmp"
 
 # Later runs: after cursor, oldest first.
 git rev-list --reverse <latest-reviewed-sha>..HEAD
@@ -40,6 +47,11 @@ Update progress, ledger, and the per-commit artifact after each commit or subage
 agent can continue without relying on conversation context. Record enough detail that a reviewer can see
 whether a commit was truly investigated or merely skimmed: commit SHA, subject, changed paths, decision,
 invariants checked, related symbols/callers traced, candidate count, and cursor after the decision.
+
+The queue is immutable for the pass. Do not normalize, shrink, or rewrite it because wall-clock time moves
+during a long audit, and do not remove already queued commits after reviewing a later commit. If the target
+HEAD changes during the audit, finish the current target queue first or explicitly create a new follow-up
+queue after recording the previous pass state.
 
 The history pass is complete only when every queued commit has a recorded decision and
 `.security/latest_reviewed_commit` equals the audited `HEAD`. A written queue, partial progress file,
@@ -301,3 +313,21 @@ rg -n "reviewed-no-finding.*(fail open|no-op|temporar|disabled|bypass|not enforc
 Every hit must be re-reviewed, promoted to a candidate, or rewritten with concrete dismissal evidence.
 Also intentionally sample high-risk `reviewed-no-finding` commits touching billing, proxy/egress, compose,
 CI/workflows, checkpoint/resume, runner isolation, public bundles, and auth/session response shapes.
+
+## Regression oracles and prior runs
+
+When the user supplies a Codex Security CSV, previous `.security` directory, or another audit artifact
+for comparison, treat it as an oracle of candidates and coverage gaps, not as restored audit state. Do not
+copy its conclusions blindly, but make the comparison explicit:
+
+- Every externally supplied finding whose introducing commit is reachable from the target HEAD and falls
+  inside the first-run queue rules must map to one of: existing/open SEC finding, fixed SEC finding with
+  `Fixed in commit`, reviewed false positive with concrete evidence, out-of-scope by explicit reason, or
+  blocked validation.
+- If the external finding's commit is missing from `.security/commit_review_queue.txt`, treat that as a
+  queue coverage bug and repair the queue before completion.
+- If a previous local run found an issue that the current run misses, dispatch a targeted validation
+  subagent for that exact claim before dismissing it. The final report should include a short delta:
+  carried forward, newly fixed, newly dismissed, and unresolved differences.
+- Business-approved behavior, such as provider-specific billing flags, can be dismissed only after a
+  worker records the product invariant and provider semantics that make the behavior intentional.
