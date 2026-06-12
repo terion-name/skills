@@ -66,22 +66,74 @@ def read_text(path: Path, max_bytes: int = 10_000_000) -> str:
     return data.decode("utf-8", errors="ignore")
 
 
-def git_first_run_queue(repo: Path, target_head: str) -> list[str] | None:
-    """Return the target-anchored first-run queue.
+def read_json(path: Path) -> tuple[dict[str, object] | None, str | None]:
+    text = read_text(path)
+    if not text:
+        return None, "empty or missing"
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError as exc:
+        return None, f"malformed JSON: {exc}"
+    if not isinstance(value, dict):
+        return None, "JSON root is not an object"
+    return value, None
 
-    First-run coverage is the union of commits from the last two calendar
-    months and the latest 1000 commits reachable from the target head, ordered
-    oldest to newest. This intentionally is not "last two months capped at
-    1000"; dense repositories still get the latest 1000 commits.
-    """
 
-    recent_1000 = git_commit_list(repo, ["rev-list", "--max-count=1000", target_head])
-    last_two_months = git_commit_list(repo, ["log", "--since=2 months ago", "--format=%H", target_head])
-    ordered = git_commit_list(repo, ["rev-list", "--reverse", target_head])
-    if recent_1000 is None or last_two_months is None or ordered is None:
-        return None
-    wanted = set(recent_1000) | set(last_two_months)
-    return [sha for sha in ordered if sha in wanted]
+def expected_first_run_queue(repo: Path, security_dir: Path, target_head: str) -> tuple[list[str] | None, list[str]]:
+    """Return the target-anchored first-run queue from commit_review_scope.json."""
+
+    errors: list[str] = []
+    scope_path = security_dir / "commit_review_scope.json"
+    scope, read_error = read_json(scope_path)
+    if scope is None:
+        return None, [f"first-run history requires .security/commit_review_scope.json ({read_error})"]
+
+    scope_target = str(scope.get("target_head", "")).strip()
+    if scope_target and scope_target != target_head:
+        errors.append(f"commit_review_scope.json target_head is {scope_target}, expected {target_head}")
+
+    mode = str(scope.get("mode", "")).strip()
+    if not mode:
+        return None, errors + ["commit_review_scope.json must include mode"]
+
+    expected: list[str] | None
+    if mode == "latest_commits":
+        count = scope.get("count")
+        if not isinstance(count, int) or count <= 0:
+            return None, errors + ["latest_commits scope requires positive integer count"]
+        commits = git_commit_list(repo, ["rev-list", f"--max-count={count}", target_head])
+        expected = list(reversed(commits)) if commits is not None else None
+    elif mode == "since":
+        since = str(scope.get("since", "")).strip()
+        if not since:
+            return None, errors + ["since scope requires since"]
+        expected = git_commit_list(repo, ["log", f"--since={since}", "--format=%H", "--reverse", target_head])
+    elif mode == "latest_commits_or_since":
+        count = scope.get("count")
+        since = str(scope.get("since", "")).strip()
+        if not isinstance(count, int) or count <= 0 or not since:
+            return None, errors + ["latest_commits_or_since scope requires positive integer count and since"]
+        recent = git_commit_list(repo, ["rev-list", f"--max-count={count}", target_head])
+        since_commits = git_commit_list(repo, ["log", f"--since={since}", "--format=%H", target_head])
+        ordered = git_commit_list(repo, ["rev-list", "--reverse", target_head])
+        if recent is None or since_commits is None or ordered is None:
+            expected = None
+        else:
+            wanted = set(recent) | set(since_commits)
+            expected = [sha for sha in ordered if sha in wanted]
+    elif mode == "range":
+        base = str(scope.get("base", "")).strip()
+        if not base:
+            return None, errors + ["range scope requires base"]
+        expected = git_commit_list(repo, ["rev-list", "--reverse", f"{base}..{target_head}"])
+    elif mode == "all":
+        expected = git_commit_list(repo, ["rev-list", "--reverse", target_head])
+    else:
+        return None, errors + [f"unsupported commit_review_scope.json mode {mode!r}"]
+
+    if expected is None:
+        errors.append("could not compute expected commit history queue from commit_review_scope.json")
+    return expected, errors
 
 
 def iter_tool_files(tool_results: Path) -> list[Path]:
@@ -142,11 +194,13 @@ def validate_history_ledger(repo: Path, security_dir: Path, head: str | None) ->
     expected: list[str] | None = None
     if target_head and start_cursor:
         if start_cursor in {"FIRST_RUN", "first-run", "none", "NONE", "-"}:
-            expected = git_first_run_queue(repo, target_head)
+            expected, scope_errors = expected_first_run_queue(repo, security_dir, target_head)
+            errors.extend(scope_errors)
         else:
             expected = git_commit_list(repo, ["rev-list", "--reverse", f"{start_cursor}..{target_head}"])
         if expected is None:
-            errors.append("could not compute expected commit history queue from git")
+            if not errors:
+                errors.append("could not compute expected commit history queue from git")
         elif queue and queue != expected:
             errors.append(
                 "commit_review_queue.txt does not match expected git range "

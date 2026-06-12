@@ -405,10 +405,11 @@ If there are no validated findings, say so clearly and still include coverage, s
 ### 9. Run commit history review
 
 After the current-HEAD sweep and interim report, review commit history unless the task explicitly scoped
-the audit to current HEAD, a PR/diff, or a subtree. On a fresh state, review the union of commits
-reachable from the target HEAD that are either in the latest 1000 commits or dated within the last
-2 calendar months, oldest to newest. Before review, write
-`.security/commit_review_start_cursor`, `.security/commit_review_target_head`, and
+the audit to current HEAD, a PR/diff, or a subtree. On a fresh state, the initial prompt must specify the
+history depth/range; if it did not, ask the user before queue creation. Useful scopes are latest N
+commits, since a date/duration, latest N plus since a date/duration, an explicit base..HEAD range, or all
+history. Before review, write `.security/commit_review_start_cursor`,
+`.security/commit_review_target_head`, `.security/commit_review_scope.json`, and
 `.security/commit_review_queue.txt`. For each commit, write a detailed
 `.security/commit-reviews/<sha>.md` note, append a JSON object to `.security/commit_review_ledger.jsonl`,
 record skip/review/candidate decision in `.security/commit_review_progress.md`, and update

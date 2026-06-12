@@ -57,7 +57,7 @@ explicitly approves degraded local-only coverage.
 
 **Report.** Write one file per finding, a scan manifest, and a summary report. Findings include evidence, validation, impact, likelihood, remediation, false-positive checks, and optionally a suggested patch. The skill proposes patches but does not apply them unless the user asks for remediation afterward.
 
-**Commit history.** After the current-HEAD sweep, continue into the incremental per-commit pass unless the user explicitly scoped it out. On a first run, review the union of the latest 1000 commits and commits from the last two calendar months, then advance the durable cursor only after each commit is assessed or skipped.
+**Commit history.** After the current-HEAD sweep, continue into the incremental per-commit pass unless the user explicitly scoped it out. On a first run, the agent asks for history depth if the prompt did not specify it, records that scope, then advances the durable cursor only after each commit is assessed or skipped.
 
 ## What good output looks like
 

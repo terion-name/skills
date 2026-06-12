@@ -303,6 +303,7 @@ or the misplaced file first.
 
 ## Commit history review
 - Cursor: <latest reviewed commit, or none>
+- Scope: <latest_commits N | since date | latest_commits_or_since | range | all>; see commit_review_scope.json.
 - Range reviewed: <oldest>..<newest>; <n> reviewed, <n> skipped as non-functional.
 - Queue/ledger/artifacts: <queue n>, <ledger n>, <commit-reviews n>. Target HEAD: <sha>.
 - New findings from commits: <ids>. Enriched existing findings: <ids>. Fixed historical findings: <ids>.
@@ -377,7 +378,7 @@ If there are no findings, say so clearly and still include coverage, skipped too
 - Supply-chain evidence dossier: <SBOM/provenance/attestation/signing/Scorecard-style checks/KEV/VEX>.
 - Cloud/IaC identity paths: <workload identities, OIDC principals, roles, effective permissions, assets>.
 - Commit history review: <range, count reviewed/skipped, latest cursor, progress file path>.
-- Commit history evidence: <start cursor, target head, queue file, ledger entries, per-commit artifacts>.
+- Commit history evidence: <start cursor, target head, scope file, queue file, ledger entries, per-commit artifacts>.
 - Completion gate: <pass/fail, command, output path>.
 - Any project-code-executing commands run (and why): <... or "none">
 ```

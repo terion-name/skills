@@ -166,6 +166,10 @@ except where explicitly allowed below — the point is to preserve your context 
   `candidate` is an intermediate triage decision, not a final state; before completion, every candidate
   from tools must be promoted to a normal `findings/SEC-NNN-*.md` or `fixed/SEC-NNN-*.md` report,
   dismissed with concrete evidence, or marked blocked with the missing evidence source.
+- **Ask for first-run history depth.** When commit history is in scope, `.security/latest_reviewed_commit`
+  is absent/empty, and the user's initial prompt did not explicitly specify a history range/depth, stop
+  and ask before creating `.security/commit_review_queue.txt`. Offer choices such as `latest N commits`,
+  `since <date/duration>`, `range <base>..HEAD`, or `all history`; do not silently choose a default.
 
 ## Prerequisites
 
@@ -414,18 +418,20 @@ single diff/PR, or a subtree. Do not merely write a queued backlog and stop; cre
 looks for security issues and serious functional regressions introduced by individual commits.
 
 Use `.security/latest_reviewed_commit` as the durable cursor only if it exists in the current worktree and
-is non-empty. If it is deleted or absent, treat this as a first run: review the union of commits reachable
-from the target HEAD that are either in the latest 1000 commits or are dated within the last 2 calendar
-months. On later runs, review commits after the cursor through `HEAD`. Always process oldest to newest.
-Do not recover a deleted cursor from git history.
+is non-empty. If it is deleted or absent, treat this as a first run. The first-run depth must come from
+the user's initial prompt; if it does not, ask the user before queue creation. Supported scopes include
+`latest_commits`, `since`, `latest_commits_or_since`, `range`, and `all`. On later runs, review commits
+after the cursor through `HEAD`. Always process oldest to newest. Do not recover a deleted cursor from
+git history.
 
 Actively use subagents and keep durable progress:
 
 - Before reviewing, write `.security/commit_review_start_cursor`, `.security/commit_review_target_head`,
-  and `.security/commit_review_queue.txt` with the exact ordered queue. Then update
-  `.security/commit_review_progress.md`, `.security/commit_review_ledger.jsonl`, and
+  `.security/commit_review_scope.json`, and `.security/commit_review_queue.txt` with the exact ordered
+  queue. Then update `.security/commit_review_progress.md`, `.security/commit_review_ledger.jsonl`, and
   `.security/commit-reviews/<sha>.md` as each commit is actually assessed so a resumed agent can continue
-  without relying on chat context.
+  without relying on chat context. `commit_review_scope.json` records the user-selected first-run scope,
+  for example `{"mode":"latest_commits","count":1000}` or `{"mode":"since","since":"2026-04-01"}`.
 - The queue is immutable once written for that pass. Do not shrink, renormalize, or drop old queue entries
   because wall-clock time moved during a long run. If HEAD changes, finish the queued target HEAD first or
   create a new explicit follow-up queue after recording the previous pass state.
@@ -490,6 +496,7 @@ with the Security Officer agent" below):
 ├── latest_reviewed_commit     # latest commit SHA assessed by the incremental commit-review flow
 ├── commit_review_start_cursor # cursor before this history pass, or FIRST_RUN
 ├── commit_review_target_head  # HEAD the queue is expected to reach
+├── commit_review_scope.json   # user-selected first-run history scope/depth
 ├── commit_review_queue.txt    # exact ordered commits for this pass, one SHA per line
 ├── commit_review_progress.md  # in-flight commit queue/progress so long reviews can resume
 ├── commit_review_ledger.jsonl # one machine-checkable review decision per queued commit

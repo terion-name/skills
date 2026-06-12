@@ -12,22 +12,34 @@ non-functional commits. Do not recover a deleted cursor from git history; a dele
 the current audit state was reset unless the user explicitly asks to restore old artifacts.
 
 - If the cursor exists on disk and is non-empty, review commits after it through `HEAD`.
-- If the cursor is absent from the worktree or empty, this is a first run. Review the union of commits
-  reachable from the target HEAD that are either in the latest 1000 commits or dated within the last
-  2 calendar months. This avoids missing dense-history regressions just because the last two months
-  contain fewer than 1000 commits.
+- If the cursor is absent from the worktree or empty, this is a first run. The history depth must be
+  explicit. If the user's initial prompt did not specify it, ask before queue creation. Useful choices:
+  latest N commits, since a date/duration, latest N plus since a date/duration, an explicit base..HEAD
+  range, or all reachable history.
 - Always process commits from oldest to newest.
 
 Useful commands:
 
 ```bash
-# First run: latest 1000 commits plus commits from the last 2 months, oldest first.
+# First run, latest N commits:
+target="$(git rev-parse HEAD)"
+git rev-list --reverse --max-count=<N> "$target"
+
+# First run, since date/duration:
+git log --since="<date-or-duration>" --format=%H --reverse "$target"
+
+# First run, union of latest N and since date/duration:
 target="$(git rev-parse HEAD)"
 tmp="$(mktemp)"
-{ git rev-list --max-count=1000 "$target"; git log --since="2 months ago" --format=%H "$target"; } |
-  sort -u > "$tmp"
+{ git rev-list --max-count=<N> "$target"; git log --since="<date-or-duration>" --format=%H "$target"; } | sort -u > "$tmp"
 git rev-list --reverse "$target" | grep -Fxf "$tmp"
 rm -f "$tmp"
+
+# First run, explicit range:
+git rev-list --reverse <base>..HEAD
+
+# First run, all reachable history:
+git rev-list --reverse "$target"
 
 # Later runs: after cursor, oldest first.
 git rev-list --reverse <latest-reviewed-sha>..HEAD
@@ -37,6 +49,13 @@ Before starting, write the machine-checkable queue state:
 
 - `.security/commit_review_start_cursor` — previous cursor SHA, or `FIRST_RUN` for a fresh state.
 - `.security/commit_review_target_head` — `git rev-parse HEAD` at queue creation time.
+- `.security/commit_review_scope.json` — for first runs, the user-selected history depth, so the
+  completion gate can recompute and verify the queue. Examples:
+  - `{"schema_version":1,"target_head":"<sha>","mode":"latest_commits","count":1000}`
+  - `{"schema_version":1,"target_head":"<sha>","mode":"since","since":"2026-04-01"}`
+  - `{"schema_version":1,"target_head":"<sha>","mode":"latest_commits_or_since","count":1000,"since":"2 months ago"}`
+  - `{"schema_version":1,"target_head":"<sha>","mode":"range","base":"<base-sha>"}`
+  - `{"schema_version":1,"target_head":"<sha>","mode":"all"}`
 - `.security/commit_review_queue.txt` — exact ordered commit queue, one SHA per line.
 - `.security/commit_review_progress.md` — human progress log with total count, current batch,
   completed/skipped counts, and latest cursor.
@@ -321,7 +340,7 @@ for comparison, treat it as an oracle of candidates and coverage gaps, not as re
 copy its conclusions blindly, but make the comparison explicit:
 
 - Every externally supplied finding whose introducing commit is reachable from the target HEAD and falls
-  inside the first-run queue rules must map to one of: existing/open SEC finding, fixed SEC finding with
+  inside the selected history scope must map to one of: existing/open SEC finding, fixed SEC finding with
   `Fixed in commit`, reviewed false positive with concrete evidence, out-of-scope by explicit reason, or
   blocked validation.
 - If the external finding's commit is missing from `.security/commit_review_queue.txt`, treat that as a
