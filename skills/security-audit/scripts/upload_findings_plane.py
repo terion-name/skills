@@ -48,7 +48,8 @@ Notes:
   - Requires a Plane API key that can create project labels, work item types, properties, and work items.
   - The script creates/uses a work item type, default "Security Finding".
   - The work item type gets deterministic custom properties: SEC ID, Severity, Status, Category,
-    Standards, Commit, Fixed in commit, Resolution, Location, Detected by, and Finding path.
+    CWE, CWE description, CWE mapping, Standards, Commit, Fixed in commit, Resolution, Location,
+    Detected by, and Finding path.
   - By default uploads only .security/findings/. Add --include-fixed to upload .security/fixed/ too.
   - Work item bodies include parsed finding reports, not raw .security/tool-results/.
 """
@@ -64,6 +65,9 @@ PROPERTY_SCHEMA = [
     ("Severity", "TEXT", "Final severity from the security report"),
     ("Status", "TEXT", "Validation status"),
     ("Category", "TEXT", "Security report category"),
+    ("CWE", "TEXT", "Primary CWE code and short label"),
+    ("CWE description", "TEXT", "Catalog description for the primary CWE"),
+    ("CWE mapping", "TEXT", "Finding-specific CWE mapping rationale"),
     ("Standards", "TEXT", "ASVS/API/CWE/NIST/SLSA mappings when present"),
     ("Commit", "TEXT", "Introducing commit when known"),
     ("Fixed in commit", "TEXT", "Fix commit when already remediated"),
@@ -226,6 +230,9 @@ def property_values(finding) -> dict[str, str]:
         "Severity": finding.severity,
         "Status": finding.status,
         "Category": finding.category,
+        "CWE": finding.cwe,
+        "CWE description": finding.cwe_description,
+        "CWE mapping": finding.cwe_mapping,
         "Standards": finding.standards,
         "Commit": finding.commit,
         "Fixed in commit": finding.fixed_in_commit,

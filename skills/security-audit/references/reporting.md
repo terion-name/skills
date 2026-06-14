@@ -1,8 +1,8 @@
 # Validation, severity, chaining, and reporting
 
-This covers Steps 4–8: how to triage scanner output, validate a candidate, rate it, chain findings,
-and pass the completion gate. The target shapes are `assets/example_finding.md` (per finding) and the
-summary table below.
+This covers Steps 4–8: how to triage scanner output, validate a candidate, map CWE, rate it, chain
+findings, and pass the completion gate. The target shapes are `assets/example_finding.md` (per finding)
+and the summary table below.
 
 ---
 
@@ -56,6 +56,51 @@ validation plan before moving it to `.security/fixed/`.
 validation artifact, or chat. Record location + type + a redacted fingerprint that's enough to locate
 and triage it: `AWS-key-like token at config/prod.env:12, prefix AKIA…/suffix …X7Q, confidence high`.
 Recommend rotation + history purge.
+
+
+---
+
+## CWE mapping
+
+Every normal finding and fixed finding must have a primary CWE weakness mapping. CWE classification
+helps the user group remediation work and sync reports into issue trackers, but it does not replace
+validation evidence.
+
+Use `references/cwe/`:
+
+- `manifest.json` — catalog version/date and source.
+- `cwe-catalog.jsonl` — structured records with ID, name, short label, description, consequences,
+  detection, mitigations, related weaknesses, CAPEC links, and taxonomy mappings.
+- `cwe-labels.json` — deterministic `filename_tag` values for report filenames.
+- `cwe-index.md` — human-readable lookup table and usage examples.
+
+Mapping rules:
+
+- Prefer a specific CWE **weakness** entry over a broad category. Use a category only when no weakness
+  entry fits and explain why.
+- Choose the CWE that describes the root weakness, not merely the symptom or the impact. Example:
+  forged object IDs without ownership checks usually map to authorization/IDOR-style CWEs, not "data
+  exposure" solely because data is leaked.
+- For dependency/advisory findings, use the advisory's CWE when the advisory provides one; otherwise use
+  a package/supply-chain CWE such as vulnerable or unmaintained components only when it matches the
+  confirmed deployment state.
+- Record uncertainty honestly in `CWE mapping` (`primary`, `approximate`, or `advisory-provided`) and
+  include a one-sentence rationale.
+- Do not invent filename labels during an audit. Use the `filename_tag` from `cwe-labels.json`; if the
+  CWE is absent, refresh the catalog with `scripts/update_cwe_reference.py` before falling back to a
+  normalized official CWE name.
+
+Required metadata fields:
+
+```
+CWE: CWE-22 - Path Traversal
+CWE description: <one-sentence catalog description, trimmed for readability>
+CWE mapping: primary; <why this CWE matches the source/sink or invariant break>
+Standards: CWE-22, <other applicable mappings>
+```
+
+If multiple CWEs materially apply, put the primary one in `CWE` and filename, then list additional CWE
+codes in `Standards` and explain the relationship in `CWE mapping`.
 
 ---
 
@@ -118,19 +163,20 @@ Document chains in `.security/report.md` and cross-link the findings.
 
 ## Per-finding report format
 
-One file per finding at `.security/findings/SEC-NNN-<slug>.md`, following `assets/finding_template.md`
-(which mirrors `assets/example_finding.md`). Required sections:
+One file per finding at
+`.security/findings/SEC-NNN-[SEVERITY]-[CWE-NNN-label]-<slug>.md`, following
+`assets/finding_template.md` (which mirrors `assets/example_finding.md`). Required sections:
 
 - **Header:** `Title`, `Criticality: <level> (attack path: <level>)`, `Status: <validated|likely|
   unvalidated|false-positive>`. In commit/diff mode, also tag `Origin: <introduced-by-diff|pre-existing|
   uncertain>` so reviewers know whether the PR caused it.
 - **# Metadata:** repo, commit, fixed-in commit if applicable, author (if known), created date, category
   (`auth|injection|ssrf|supply-chain|secrets|cve|container|iac|crypto|memory|functional-regression|other`),
-  standards mapping (`ASVS vX.Y.Z-...`, `OWASP APIx:YYYY`, `CWE-...`, `NIST SSDF ...`, `SLSA`/Scorecard
-  where applicable), detected-by (`manual|semgrep|trivy|commit-review|...`), signals (e.g. `Security,
-  Validated, Patch generated, Attack-path`), resolution if applicable. In commit-history review, `Commit`
-  is the commit that introduced the issue; `Fixed in commit` is the later commit that remediated it, if
-  already fixed.
+  primary CWE (`CWE: CWE-NNN - <short label>`), CWE description, CWE mapping rationale, standards mapping
+  (`ASVS vX.Y.Z-...`, `OWASP APIx:YYYY`, `CWE-...`, `NIST SSDF ...`, `SLSA`/Scorecard where applicable),
+  detected-by (`manual|semgrep|trivy|commit-review|...`), signals (e.g. `Security, Validated, Patch
+  generated, Attack-path`), resolution if applicable. In commit-history review, `Commit` is the commit
+  that introduced the issue; `Fixed in commit` is the later commit that remediated it, if already fixed.
 - **# Summary:** plain-language description of the bug, the root cause, *and* the fix direction, in a
   few sentences. A reader should understand the whole thing from this alone.
 - **# Validation:** the `## Rubric` checkboxes you confirmed, then a `## Report` paragraph describing how
@@ -154,8 +200,21 @@ Assign finding IDs chronologically. For every scan, including the first one, ins
 `SEC-NNN`, and assign new findings starting at the next unused ID. Deleted tracked `.security` files in
 git history do not count; if the user removed them, treat that as a reset unless they explicitly ask you
 to restore prior audit state. Do not reuse IDs from fixed findings that still exist in the worktree, and
-do not renumber old findings when severity changes. Severity belongs in the finding metadata and the
-severity-sorted summary table, not in the ID sequence.
+do not renumber old findings when severity changes. Severity is included in the filename for quick
+scanning, but the ID remains chronological.
+
+Filename convention:
+
+```
+SEC-001-[CRITICAL]-[CWE-22-path-traversal]-arbitrary-file-read.md
+```
+
+- `[CRITICAL]` is the uppercase final severity from the `Criticality:` header.
+- `[CWE-22-path-traversal]` is the primary CWE `filename_tag` from `references/cwe/cwe-labels.json`.
+- The trailing slug describes the project-specific issue, not the generic CWE.
+- When a finding moves from `findings/` to `fixed/`, keep the same filename unless the original filename
+  predates this convention; do not renumber. If severity or CWE was wrong, update the metadata and rename
+  only after preserving the original `SEC-NNN` ID.
 
 When a finding is remediated, move its file from `.security/findings/` to `.security/fixed/` and update
 its metadata with `Resolution: fixed`, the fix commit/date if known, and any follow-up validation notes.
@@ -170,7 +229,8 @@ the commit evidence instead of creating a duplicate. Do not dedupe against delet
 history unless the user explicitly asks to recover old audit artifacts.
 
 Do not use alternate metadata keys for historical reports. Fixed reports must still use the same header,
-`# Metadata`, `Criticality`, `Commit`, `Fixed in commit`, `Category`, `Detected by`, and `Resolution`
+`# Metadata`, `Criticality`, `Commit`, `Fixed in commit`, `Category`, `CWE`, `CWE description`,
+`CWE mapping`, `Detected by`, and `Resolution`
 fields as open findings. `Commit` is the introducing commit in commit-history mode; never put the review
 HEAD or `.security` artifact commit there when the actual introducing commit is known. Extra narrative
 about introduction/fix series belongs in `# Summary`, `# Evidence`, or validation text, not in replacement
@@ -187,15 +247,17 @@ Raw scanner output is evidence, not a report, and it cannot remain unprocessed. 
 `.security/tool-results/`, then delegate parsing and triage to tool-triage sub-agents before final
 reporting. The orchestrator must not inspect raw scanner JSON/SARIF/CVE output directly except for
 metadata/count checks. Any actionable tool-derived issue that survives code/dataflow confirmation and
-validation becomes a standard `.security/findings/SEC-NNN-<slug>.md` file using the normal per-finding
-format above. Set `Detected by` to the tool name (for example `semgrep`, `trivy`, `grype`,
+validation becomes a standard `.security/findings/SEC-NNN-[SEVERITY]-[CWE-NNN-label]-<slug>.md` file
+using the normal per-finding format above. Set `Detected by` to the tool name (for example `semgrep`,
+`trivy`, `grype`,
 `osv-scanner`, `dependency-check`, or `gitleaks`) and link the raw output path in `# Evidence` or
 `# Validation`.
 
 `candidate` is only an in-flight triage state. A completed audit must not leave tool-triage candidates
 unresolved. Before the completion gate can pass, every tool-derived candidate must become one of:
 
-- `finding:SEC-NNN` or a linked `.security/fixed/SEC-NNN-*.md` report using the standard finding format
+- `finding:SEC-NNN` or a linked `.security/fixed/SEC-NNN-[SEVERITY]-[CWE-NNN-label]-*.md` report using
+  the standard finding format
 - `dismissed:<reason>` with concrete code/package/deployment evidence
 - `blocked:<reason>` with the missing evidence source and a follow-up command or condition
 
@@ -268,10 +330,10 @@ or the misplaced file first.
 <commit, branch, paths reviewed, deployment assumptions; link to .security/threat_model.md>
 
 ## Findings
-| ID | Severity | Status | Title | Location | Finding |
-|----|----------|--------|-------|----------|---------|
-| SEC-001 | critical | validated | ... | path:line | findings/SEC-001-...md |
-| SEC-002 | high | likely | ... | path:line | findings/SEC-002-...md |
+| ID | Severity | CWE | Status | Title | Location | Finding |
+|----|----------|-----|--------|-------|----------|---------|
+| SEC-001 | critical | CWE-22 Path Traversal | validated | ... | path:line | findings/SEC-001-[CRITICAL]-[CWE-22-path-traversal]-...md |
+| SEC-002 | high | CWE-918 SSRF | likely | ... | path:line | findings/SEC-002-[HIGH]-[CWE-918-server-side-request-forgery]-...md |
 ...
 (sorted critical → low)
 
@@ -283,7 +345,7 @@ or the misplaced file first.
 - <actionable known-vuln deps with linked findings, plus count of dismissed/blocked advisories; link to tool_triage.md>
 
 ## Standards / framework coverage
-- <ASVS/API/CWE/NIST/SLSA/Scorecard mappings used, and notable unmapped areas>
+- <ASVS/API/CWE/NIST/SLSA/Scorecard mappings used, CWE catalog version/date, and notable approximate mappings>
 
 ## Supply-chain evidence dossier
 - <SBOM/provenance/attestation/signing/Scorecard-style checks/KEV/VEX status, with output paths>
@@ -299,7 +361,7 @@ or the misplaced file first.
 - Findings created from tools: <SEC-NNN...>. Blocked tool validation: <items>.
 
 ## Fixed findings
-- <SEC-NNN> — <title>, fixed in <commit/date if known>. Link to fixed/SEC-NNN-...md.
+- <SEC-NNN> — <title>, fixed in <commit/date if known>. Link to fixed/SEC-NNN-[SEVERITY]-[CWE-NNN-label]-...md.
 
 ## Commit history review
 - Cursor: <latest reviewed commit, or none>

@@ -21,6 +21,13 @@ from pathlib import Path
 
 
 ADVISORY_RE = re.compile(r"\b(?:CVE-\d{4}-\d{4,}|GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4})\b", re.I)
+CWE_RE = re.compile(r"\bCWE-\d+\b", re.I)
+FINDING_FILENAME_RE = re.compile(
+    r"^SEC-(?P<index>\d{3,})-\[(?P<severity>CRITICAL|HIGH|MEDIUM|LOW|INFORMATIONAL)\]-"
+    r"\[(?P<tag>CWE-(?P<cwe_number>\d+)-[a-z0-9][a-z0-9-]*)\]-.+\.md$"
+)
+CRITICALITY_RE = re.compile(r"^Criticality:\s*([A-Za-z]+)", re.M)
+METADATA_RE = re.compile(r"^([A-Za-z][A-Za-z0-9 _/-]*):\s*(.*)$", re.M)
 SECURITY_DIR_DEFAULT = ".security"
 VALID_REVIEW_STATUSES = {"skip", "reviewed-no-finding", "candidate"}
 REQUIRED_DELEGATION_BASE_PHASES = {"threat-model", "scan", "report-draft"}
@@ -77,6 +84,92 @@ def read_json(path: Path) -> tuple[dict[str, object] | None, str | None]:
     if not isinstance(value, dict):
         return None, "JSON root is not an object"
     return value, None
+
+
+def load_cwe_labels() -> dict[str, dict[str, str]]:
+    labels_path = Path(__file__).resolve().parents[1] / "references" / "cwe" / "cwe-labels.json"
+    labels, error = read_json(labels_path)
+    if labels is None:
+        return {}
+    output: dict[str, dict[str, str]] = {}
+    for key, value in labels.items():
+        if isinstance(value, dict):
+            output[str(key).upper()] = {str(k): str(v) for k, v in value.items()}
+    return output
+
+
+def parse_metadata(text: str) -> dict[str, str]:
+    return {match.group(1).strip(): match.group(2).strip() for match in METADATA_RE.finditer(text)}
+
+
+def validate_finding_files(security_dir: Path) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    cwe_labels = load_cwe_labels()
+
+    for base in ["findings", "fixed"]:
+        for path in sorted((security_dir / base).glob("SEC-*.md")):
+            rel = path.relative_to(security_dir)
+            text = read_text(path)
+            filename_match = FINDING_FILENAME_RE.match(path.name)
+            if not filename_match:
+                errors.append(
+                    f"{rel}: filename must be SEC-NNN-[SEVERITY]-[CWE-NNN-label]-slug.md"
+                )
+                filename_cwe = ""
+                filename_severity = ""
+                filename_tag = ""
+            else:
+                filename_cwe = f"CWE-{filename_match.group('cwe_number')}".upper()
+                filename_severity = filename_match.group("severity").lower()
+                filename_tag = filename_match.group("tag")
+
+            criticality_match = CRITICALITY_RE.search(text)
+            if not criticality_match:
+                errors.append(f"{rel}: missing Criticality header")
+                criticality = ""
+            else:
+                criticality = criticality_match.group(1).lower()
+                if filename_match and criticality != filename_severity:
+                    errors.append(
+                        f"{rel}: filename severity [{filename_severity.upper()}] does not match Criticality {criticality}"
+                    )
+
+            metadata = parse_metadata(text)
+            for field in ["CWE", "CWE description", "CWE mapping", "Standards"]:
+                if not metadata.get(field):
+                    errors.append(f"{rel}: missing metadata field {field!r}")
+
+            cwe_field = metadata.get("CWE", "")
+            cwe_match = CWE_RE.search(cwe_field)
+            if not cwe_match:
+                errors.append(f"{rel}: CWE metadata must include CWE-NNN")
+                metadata_cwe = ""
+            else:
+                metadata_cwe = cwe_match.group(0).upper()
+                if filename_match and metadata_cwe != filename_cwe:
+                    errors.append(f"{rel}: filename CWE {filename_cwe} does not match metadata {metadata_cwe}")
+
+            standards = metadata.get("Standards", "")
+            if metadata_cwe and metadata_cwe not in standards.upper():
+                errors.append(f"{rel}: Standards must include primary {metadata_cwe}")
+
+            cwe_description = metadata.get("CWE description", "")
+            if cwe_description and len(cwe_description) < 25:
+                warnings.append(f"{rel}: CWE description is very short; verify it came from the catalog")
+
+            cwe_mapping = metadata.get("CWE mapping", "")
+            if cwe_mapping and len(cwe_mapping) < 25:
+                warnings.append(f"{rel}: CWE mapping rationale is thin")
+
+            if filename_match and filename_cwe:
+                expected = cwe_labels.get(filename_cwe, {}).get("filename_tag", "")
+                if expected and filename_tag != expected:
+                    errors.append(f"{rel}: filename CWE tag {filename_tag} does not match catalog tag {expected}")
+                elif not expected:
+                    warnings.append(f"{rel}: {filename_cwe} not found in bundled CWE labels; refresh catalog")
+
+    return errors, warnings
 
 
 def expected_first_run_queue(repo: Path, security_dir: Path, target_head: str) -> tuple[list[str] | None, list[str]]:
@@ -459,6 +552,9 @@ def main() -> int:
         if not (security_dir / rel).exists():
             errors.append(f"missing required artifact: {security_dir / rel}")
 
+    finding_errors, finding_warnings = validate_finding_files(security_dir)
+    errors.extend(finding_errors)
+    warnings.extend(finding_warnings)
     errors.extend(validate_report_counts(security_dir))
 
     if args.history_required == "yes":

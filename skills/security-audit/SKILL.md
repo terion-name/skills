@@ -68,7 +68,8 @@ Mirror the Codex Security stages. Each stage has a dedicated reference; read it 
    `references/policies/*`.
 4. **Validate** — triage every tool output first, then reproduce candidate findings in the sandbox to
    kill false positives. See `references/reporting.md` ("Validation").
-5. **Severity + chaining** — rate each finding and chain related findings into attack paths. See `references/reporting.md`.
+5. **CWE + severity + chaining** — map each finding to a primary CWE weakness, rate it, and chain
+   related findings into attack paths. See `references/reporting.md` and `references/cwe/`.
 6. **Report** — write one file per finding to `.security/findings/`, then a `.security/report.md` summary.
 7. **Commit history review** — after the current-HEAD sweep, review commits incrementally from oldest to
    newest, using `.security/latest_reviewed_commit` as the cursor. See `references/commit-history-review.md`.
@@ -164,8 +165,14 @@ except where explicitly allowed below — the point is to preserve your context 
   If `.security/tool-results/` contains scanner output, `.security/tool_triage.md` must account for every
   raw result file and every CVE/GHSA/advisory ID as a finding, explicit dismissal, or blocked validation.
   `candidate` is an intermediate triage decision, not a final state; before completion, every candidate
-  from tools must be promoted to a normal `findings/SEC-NNN-*.md` or `fixed/SEC-NNN-*.md` report,
+  from tools must be promoted to a normal
+  `findings/SEC-NNN-[SEVERITY]-[CWE-NNN-label]-*.md` or
+  `fixed/SEC-NNN-[SEVERITY]-[CWE-NNN-label]-*.md` report,
   dismissed with concrete evidence, or marked blocked with the missing evidence source.
+- **CWE is required for findings.** Every normal finding/fixed report must include a primary CWE mapping
+  in metadata (`CWE`, `CWE description`, `CWE mapping`, and `Standards: CWE-...`). Use
+  `references/cwe/cwe-catalog.jsonl` and `references/cwe/cwe-labels.json`; do not invent ad hoc CWE
+  names or filename labels when the catalog contains the code.
 - **Ask for first-run history depth.** When commit history is in scope, `.security/latest_reviewed_commit`
   is absent/empty, and the user's initial prompt did not explicitly specify a history range/depth, stop
   and ask before creating `.security/commit_review_queue.txt`. Offer choices such as `latest N commits`,
@@ -179,6 +186,9 @@ except where explicitly allowed below — the point is to preserve your context 
 - A git repository is ideal (enables diff/commit scoping and patch generation) but not required.
 - Docker is the preferred scanner runtime. Network access may be needed to pull scanner images or update
   rule/CVE databases; `references/tooling.md` defines the strict preflight and offline/degraded options.
+- CWE reference data lives under `references/cwe/`. Use the bundled catalog by default. If the catalog is
+  missing, or the user asks to refresh CWE, run `scripts/update_cwe_reference.py` before drafting findings
+  and record the catalog version/date in `.security/scan_manifest.md`.
 
 ## Step 0 — Tooling preflight (must be first)
 
@@ -315,7 +325,8 @@ tool file or advisory ID is missing.
      disproven with code/package evidence must become candidate findings; do not bury them in raw output.
   7. Record tools run/skipped (+ versions, commands, exit codes, why-skipped) for the manifest.
 - Report back: a list of CANDIDATE findings. Each = {title, path:line, vuln_class, one_line_why,
-  source_to_sink_flow_or_broken_invariant, standards_mapping_if_obvious, supporting evidence snippets}.
+  source_to_sink_flow_or_broken_invariant, primary_cwe_if_obvious, standards_mapping_if_obvious,
+  supporting evidence snippets}.
   Mark anything you could not confirm as "needs validation".
 - Do NOT assign final severity, do NOT chain exploits, do NOT patch. Keep scope to this partition.
 - Constraints: read-only review + running scanners only; do not modify code; PoC only inside the sandbox if trivially safe.
@@ -364,10 +375,15 @@ blindspot and delegate code-review validation — don't silently drop the findin
 - Constraints: read-only except safe validation artifacts under .security/validation/<temp id>/; no source patching.
 ```
 
-## Step 5 — Severity + exploit chaining
+## Step 5 — CWE + severity + exploit chaining
 
 For each validated/likely finding, use sub-agent evidence and follow `references/reporting.md`:
 
+- **Map CWE first.** Search `references/cwe/cwe-catalog.jsonl` and `references/cwe/cwe-labels.json` by
+  candidate class, sink, and common name. Choose the closest primary **weakness** entry, not a broad
+  category, unless no weakness fits. Record `CWE: CWE-NNN - <short label>`, the catalog description, and
+  a one-sentence mapping rationale. CWE guides classification and remediation language; it is not proof
+  that the issue exists and it must not replace validation evidence.
 - Assign **likelihood** and **impact**, derive a **matrix severity**, then apply threat-model policy to
   reach a **final severity** (critical / high / medium / low). Record the rationale, assumptions, and the
   attacker preconditions — the attack-path block in `assets/example_finding.md` is the target shape.
@@ -380,15 +396,20 @@ For each validated/likely finding, use sub-agent evidence and follow `references
 
 Write artifacts (read `references/reporting.md` for the exact templates, and use `assets/finding_template.md`):
 
-- **One file per finding** at `.security/findings/SEC-NNN-<slug>.md`, drafted by finding-draft
+- **One file per finding** at `.security/findings/SEC-NNN-[SEVERITY]-[CWE-NNN-label]-<slug>.md`, drafted by finding-draft
   sub-agents and finalized mechanically by the orchestrator, in the `assets/example_finding.md` shape:
-  title, criticality (with attack-path severity), status, metadata, summary, validation (rubric + report),
-  evidence (code excerpts with notes), proposed patch (diff), and attack-path analysis (final/likelihood/
-  impact/assumptions/path/path-evidence/narrative/controls/blindspots). Assign IDs chronologically by
-  starting after the highest `SEC-NNN` file currently present on disk in `.security/findings/` or
-  `.security/fixed/`; do not count deleted tracked files from git history. Do not renumber or reuse fixed
-  IDs that still exist in the worktree. Put repro artifacts under `.security/validation/SEC-NNN/`. Keep
-  proposed patches embedded in the finding file.
+  title, criticality (with attack-path severity), status, metadata, CWE code/description/mapping, summary,
+  validation (rubric + report), evidence (code excerpts with notes), proposed patch (diff), and
+  attack-path analysis (final/likelihood/impact/assumptions/path/path-evidence/narrative/controls/
+  blindspots). Assign IDs chronologically by starting after the highest `SEC-NNN` file currently present
+  on disk in `.security/findings/` or `.security/fixed/`; do not count deleted tracked files from git
+  history. Use the uppercase final severity in the filename and the primary CWE `filename_tag` from
+  `references/cwe/cwe-labels.json`, e.g.
+  `SEC-001-[CRITICAL]-[CWE-22-path-traversal]-arbitrary-file-read.md`. Do not generate new labels at
+  report time unless the CWE is absent from the catalog; if that happens, use the CWE official name,
+  record the custom label decision in the finding, and prefer refreshing the catalog. Do not renumber or
+  reuse fixed IDs that still exist in the worktree. Put repro artifacts under `.security/validation/SEC-NNN/`.
+  Keep proposed patches embedded in the finding file.
 - **Tool triage** at `.security/tool_triage.md` using `assets/tool_triage_template.md`: every raw
   scanner output file and every dependency advisory/CVE/GHSA from tool output must have a decision,
   linked finding, or explicit dismissal/blocker.
@@ -400,7 +421,7 @@ Write artifacts (read `references/reporting.md` for the exact templates, and use
   points). This makes coverage auditable.
 - **A summary** at `.security/report.md`, drafted by a report-draft sub-agent from the finding files,
   tool triage, manifest, and commit ledger, then sanity-checked by the orchestrator: executive summary,
-  scope, a severity-sorted findings table (ID, severity, status, title, location, link), the chained
+  scope, a severity-sorted findings table (ID, severity, CWE, status, title, location, link), the chained
   attack paths, dependency/CVE summary (only actionable, with reachability), tool triage summary,
   redacted secrets summary, false positives considered, tool + manual coverage, recommended next actions,
   and blindspots / what wasn't scanned.
@@ -507,9 +528,9 @@ with the Security Officer agent" below):
 ├── delegation_log.jsonl       # one record per sub-agent task/output
 ├── completion_gate.txt        # output of scripts/audit_completion_gate.py from the final pass
 ├── findings/
-│   └── SEC-NNN-slug.md        # one finding per file (example_finding shape), chronological IDs
+│   └── SEC-NNN-[SEVERITY]-[CWE-NNN-label]-slug.md  # one finding per file, chronological IDs
 ├── fixed/
-│   └── SEC-NNN-slug.md        # fixed findings moved here; IDs stay reserved for future scans
+│   └── SEC-NNN-[SEVERITY]-[CWE-NNN-label]-slug.md  # fixed findings moved here; IDs stay reserved
 ├── tool-results/              # raw scanner output only; actionable hits become normal findings
 ├── tool-cache/                # scanner DB/cache mounts; gitignored
 └── validation/
@@ -522,6 +543,21 @@ Keep `threat_model.md`, `latest_reviewed_commit`, `commit_review_progress.md`, `
 those tracked artifacts in the worktree, respect that as a reset and start from the files that remain.
 Raw files in `tool-results/` and bulky `validation/` artifacts can be gitignored if noisy.
 `tool-cache/` should always be gitignored; it is scanner cache/database state, not audit evidence.
+
+## CWE reference maintenance
+
+Use the generated CWE catalog for taxonomy mapping and filename labels:
+
+```bash
+scripts/update_cwe_reference.py
+```
+
+The updater downloads MITRE's latest `cwec_latest.xml.zip`, extracts the XML catalog, and writes
+`references/cwe/manifest.json`, `references/cwe/cwe-catalog.jsonl`, `references/cwe/cwe-labels.json`,
+and `references/cwe/cwe-index.md`. For offline development or testing against a fixed view, pass
+`--xml <path-to-cwe.xml>`. The generated labels are deterministic: the updater prefers short taxonomy
+labels such as PLOVER when useful and falls back to a normalized CWE name. Agents should use those
+pre-generated labels in filenames instead of asking an LLM to invent labels during an audit.
 
 ## Upload findings to issue trackers
 
@@ -553,7 +589,7 @@ scripts/upload_findings_plane.py --project-id workspace-slug/project-uuid --host
 - `--host`: optional provider base URL for self-hosted GitLab or Plane; GitHub Enterprise hosts are converted to `/api/v3`.
 - `--finding-index-from`: optional first `SEC-NNN` index to upload.
 - `--label`: optional label; scripts create it if missing.
-- `--issue-type`: Plane-only work item type; created if missing. The Plane script also creates custom properties mirroring the security finding template (`SEC ID`, `Severity`, `Status`, `Category`, `Standards`, `Commit`, `Fixed in commit`, `Resolution`, `Location`, `Detected by`, `Finding path`) and fills them deterministically.
+- `--issue-type`: Plane-only work item type; created if missing. The Plane script also creates custom properties mirroring the security finding template (`SEC ID`, `Severity`, `Status`, `Category`, `CWE`, `CWE description`, `CWE mapping`, `Standards`, `Commit`, `Fixed in commit`, `Resolution`, `Location`, `Detected by`, `Finding path`) and fills them deterministically.
 - `--api-key-env-name`: optional token env var, defaulting to `GITHUB_API_KEY`, `GITLAB_API_KEY`, or `PLANE_API_KEY`.
 - `--include-fixed`: also upload `.security/fixed/` historical findings.
 - `--dry-run`: parse and print planned uploads without API writes.

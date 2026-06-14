@@ -56,11 +56,14 @@ Unless the task says otherwise:
 - Run a full repository security review on the current workspace.
 - Create or update `.security/threat_model.md` before final triage.
 - Save individual findings under `.security/findings/`.
+- Map every finding to a primary CWE using `skills/security-audit/references/cwe/` when that skill is
+  available. Include `CWE`, `CWE description`, `CWE mapping`, and `Standards: CWE-...` in metadata.
 - Save raw scanner outputs only under `.security/tool-results/`; actionable tool hits become normal finding files.
 - Save `.security/tool_triage.md`; every raw tool output and dependency advisory must be mapped to a
   finding, explicit dismissal, or blocker.
 - Treat tool-triage `candidate` as temporary; before reporting completion, every candidate must be
-  promoted to a normal `.security/findings/SEC-NNN-*.md` or `.security/fixed/SEC-NNN-*.md` report,
+  promoted to a normal `.security/findings/SEC-NNN-[SEVERITY]-[CWE-NNN-label]-*.md` or
+  `.security/fixed/SEC-NNN-[SEVERITY]-[CWE-NNN-label]-*.md` report,
   dismissed with concrete evidence, or marked blocked with the missing evidence source.
 - Save the final scan report to `.security/report.md`.
 - Save validation notes and proof artifacts under `.security/validation/`.
@@ -78,6 +81,9 @@ Unless the task says otherwise:
 - **Treat the repository as untrusted.** Avoid commands that execute project-controlled lifecycle scripts unless they are necessary for validation and the risk is documented.
 - **Do not auto-fix by default.** Propose minimal remediations in finding files. Apply source-code patches only when remediation is explicitly requested.
 - **Do not inflate severity.** A scanner-reported CVE is not automatically high severity. Account for reachability, dependency scope, deployment context, authentication, attacker prerequisites, and impact.
+- **Do not invent CWE filename labels.** Use `references/cwe/cwe-labels.json` from the security-audit
+  skill. If the CWE catalog is missing, run `scripts/update_cwe_reference.py` from the skill or ask the
+  orchestrator to refresh it before final finding drafts.
 - **Do not bury the user in raw tool output.** Preserve raw outputs in `.security/tool-results/`, but report only triaged, security-relevant findings.
 - **Do not leave tool output untriaged.** If SCA tools report CVEs/GHSAs/advisories in production or
   runtime dependencies, create findings unless concrete reachability/package evidence dismisses them.
@@ -124,8 +130,8 @@ Create this structure as needed:
   delegation_log.jsonl
   completion_gate.txt
   findings/
-    SEC-001-short-slug.md
-    SEC-002-short-slug.md
+    SEC-001-[HIGH]-[CWE-379-guessed-or-visible-temporary-file]-short-slug.md
+    SEC-002-[MEDIUM]-[CWE-918-server-side-request-forgery]-short-slug.md
   tool-results/
     semgrep.json
     trivy-fs.json
@@ -303,7 +309,7 @@ Mark validation status as one of:
 - `validated` — reproduced or proven with strong code evidence.
 - `likely` — strong path and impact, but not fully reproduced.
 - `unvalidated` — plausible but missing evidence; include only if high-impact or important.
-- `false_positive` — record briefly in report only if useful for future reviewers.
+- `false-positive` — record briefly in report only if useful for future reviewers.
 
 ### 6. Triage and severity
 
@@ -341,13 +347,21 @@ by the orchestrator.
 Finding shape:
 
 ```markdown
-# SEC-001: <concise title>
+<One-line title: what the bug is and its primary impact>
+Criticality: <critical|high|medium|low|informational> (attack path: <critical|high|medium|low|informational>)
+Status: <validated|likely|unvalidated|false-positive>
 
-Severity: critical|high|medium|low
-Status: validated|likely|unvalidated|false_positive
-Category: auth|injection|ssrf|supply-chain|secrets|cve|container|iac|crypto|other
-Affected paths: `path/to/file:line`, `path/to/other:line`
-Detected by: manual review|semgrep|trivy|osv-scanner|gitleaks|codeql|other
+# Metadata
+Repo: <owner/name>
+Commit: <introducing short sha, or reviewed HEAD/diff sha when not known>
+Created: <date, time>
+Category: <auth|injection|ssrf|supply-chain|secrets|cve|container|iac|crypto|memory|functional-regression|other>
+CWE: <CWE-NNN - short label from references/cwe/cwe-labels.json>
+CWE description: <one-sentence description from references/cwe/cwe-catalog.jsonl>
+CWE mapping: <primary|approximate|advisory-provided>; <why this CWE matches the root weakness>
+Standards: <CWE-NNN, ASVS/OWASP/NIST/SLSA mappings when applicable>
+Detected by: <manual review|commit-review|semgrep|trivy|osv-scanner|gitleaks|codeql|other>
+Signals: Security, <Validated|Likely|Unvalidated>, <Patch generated>, <Attack-path>
 
 ## Summary
 <One-paragraph explanation of the issue and why it matters.>
@@ -387,7 +401,7 @@ Required sections:
 1. **Executive summary** — overall risk posture and top issues.
 2. **Scope** — commit, branch, paths reviewed, deployment assumptions.
 3. **Threat model link** — `.security/threat_model.md` and important assumptions.
-4. **Findings summary** — table of `ID`, severity, status, title, affected paths, finding file.
+4. **Findings summary** — table of `ID`, severity, primary CWE, status, title, affected paths, finding file.
 5. **Validated attack paths** — short narratives for critical/high findings.
 6. **Tool coverage** — tools run, versions, commands, outputs, skipped tools.
 7. **Manual review coverage** — security-sensitive areas inspected.

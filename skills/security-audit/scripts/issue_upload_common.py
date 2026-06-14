@@ -51,6 +51,18 @@ class Finding:
         return self.metadata.get("Standards", "")
 
     @property
+    def cwe(self) -> str:
+        return self.metadata.get("CWE", "")
+
+    @property
+    def cwe_description(self) -> str:
+        return self.metadata.get("CWE description", "")
+
+    @property
+    def cwe_mapping(self) -> str:
+        return self.metadata.get("CWE mapping", "")
+
+    @property
     def commit(self) -> str:
         return self.metadata.get("Commit", "")
 
@@ -193,6 +205,9 @@ def finding_markdown_body(finding: Finding) -> str:
         ("Status", finding.status),
         ("Origin", finding.origin),
         ("Category", finding.category),
+        ("CWE", finding.cwe),
+        ("CWE description", finding.cwe_description),
+        ("CWE mapping", finding.cwe_mapping),
         ("Standards", finding.standards),
         ("Commit", finding.commit),
         ("Fixed in commit", finding.fixed_in_commit),

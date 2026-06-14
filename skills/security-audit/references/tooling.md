@@ -9,7 +9,8 @@ dismiss it with evidence, or mark validation blocked.
 
 Sub-agents run these per partition and save raw output under `.security/tool-results/` (one file per
 tool, JSON/SARIF where supported). If a tool reports hits, triage them against code and turn confirmed
-actionable issues into normal `.security/findings/SEC-NNN-<slug>.md` reports; do not create readable
+actionable issues into normal
+`.security/findings/SEC-NNN-[SEVERITY]-[CWE-NNN-label]-<slug>.md` reports; do not create readable
 Markdown summaries under `.security/tool-results/`.
 
 ## Strict tooling preflight

@@ -10,7 +10,10 @@ Fixed in commit: <short sha if already fixed; omit if unresolved. Do not replace
 Author: <if known>
 Created: <date, time>
 Category: <auth|injection|ssrf|supply-chain|secrets|cve|container|iac|crypto|memory|functional-regression|other>
-Standards: <ASVS vX.Y.Z-..., OWASP APIx:YYYY, CWE-..., NIST SSDF PW/RV/..., SLSA/Scorecard where applicable; omit if not applicable>
+CWE: <CWE-NNN - short label from references/cwe/cwe-labels.json>
+CWE description: <one-sentence description from references/cwe/cwe-catalog.jsonl, trimmed for readability>
+CWE mapping: <primary|approximate|advisory-provided>; <one-sentence rationale that ties the weakness to this finding>
+Standards: <CWE-NNN, ASVS vX.Y.Z-..., OWASP APIx:YYYY, NIST SSDF PW/RV/..., SLSA/Scorecard where applicable>
 Detected by: <manual review|commit-review|semgrep|trivy|osv-scanner|gitleaks|codeql|other>
 Assignee: <Unassigned>
 Signals: Security, <Validated|Likely|Unvalidated>, <Patch generated>, <Attack-path>

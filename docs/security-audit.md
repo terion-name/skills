@@ -17,6 +17,10 @@ The `security-audit` skill exists to force a better shape:
 
 **Validation before severity.** A dependency CVE is not automatically high. A dangerous API call is not automatically exploitable. A finding becomes serious when attacker-controlled input crosses a real boundary and reaches a meaningful sink.
 
+**CWE taxonomy with evidence.** Findings include a primary CWE code, short mapping label, catalog
+description, and mapping rationale. CWE helps organize remediation and issue upload, but it never
+replaces repo-specific validation.
+
 **Durable artifacts.** The output is not just chat. The scan writes `.security/threat_model.md`, `.security/report.md`, `.security/scan_manifest.md`, one file per finding, scanner output, validation notes, and suggested patches. Later scans can reuse that context instead of starting from zero.
 
 ## The philosophy
@@ -31,7 +35,7 @@ Core positions:
 
 **Reachability is the difference between signal and noise.** The skill asks: can an attacker actually control the input, can they reach this code path in the supported deployment, and do existing controls block the path?
 
-**Validation is part of the work, not a nice extra.** Where safe, findings should be reproduced in a sandbox. Where reproduction is not practical, the report should say why and give strong static evidence instead. The statuses are deliberately blunt: `validated`, `likely`, `unvalidated`, or `false_positive`.
+**Validation is part of the work, not a nice extra.** Where safe, findings should be reproduced in a sandbox. Where reproduction is not practical, the report should say why and give strong static evidence instead. The statuses are deliberately blunt: `validated`, `likely`, `unvalidated`, or `false-positive`.
 
 **Severity is local.** The same bug can be low in one repository and critical in another. An arbitrary file write in a root-run container entrypoint is different from an operator-only dev script. The threat model supplies the calibration.
 
@@ -53,9 +57,16 @@ explicitly approves degraded local-only coverage.
 
 **Validate.** Reproduce candidate findings in the sandbox when safe, or validate them by targeted code review when dynamic proof would be destructive, unavailable, or misleading. Drop false positives instead of dressing them up.
 
-**Severity and chaining.** Rate likelihood and impact under the repository threat model. Then look across findings for kill chains: a medium auth bypass plus a medium object access bug plus a dangerous sink may be a high or critical attack path together.
+**CWE, severity, and chaining.** Map each finding to a primary CWE weakness using the generated CWE
+catalog, rate likelihood and impact under the repository threat model, then look across findings for kill
+chains: a medium auth bypass plus a medium object access bug plus a dangerous sink may be a high or
+critical attack path together.
 
-**Report.** Write one file per finding, a scan manifest, and a summary report. Findings include evidence, validation, impact, likelihood, remediation, false-positive checks, and optionally a suggested patch. The skill proposes patches but does not apply them unless the user asks for remediation afterward.
+**Report.** Write one file per finding, a scan manifest, and a summary report. Finding filenames include
+chronological ID, severity, and primary CWE tag, for example
+`SEC-001-[HIGH]-[CWE-22-path-traversal]-title.md`. Findings include evidence, validation, impact,
+likelihood, remediation, false-positive checks, and optionally a suggested patch. The skill proposes
+patches but does not apply them unless the user asks for remediation afterward.
 
 **Commit history.** After the current-HEAD sweep, continue into the incremental per-commit pass unless the user explicitly scoped it out. On a first run, the agent asks for history depth if the prompt did not specify it, records that scope, then advances the durable cursor only after each commit is assessed or skipped.
 
@@ -83,6 +94,8 @@ The useful standard is narrower: fewer scanner-only false positives, fewer misse
 - [`references/threat-model.md`](../skills/security-audit/references/threat-model.md) — how to build and refresh the repository threat model.
 - [`references/tooling.md`](../skills/security-audit/references/tooling.md) — scanner choices, commands, ecosystem notes, and offline fallbacks.
 - [`references/reporting.md`](../skills/security-audit/references/reporting.md) — validation, severity, exploit chaining, and report format.
+- [`references/cwe/`](../skills/security-audit/references/cwe/) — generated CWE catalog, labels, and filename tags.
 - [`references/policies/`](../skills/security-audit/references/policies/) — web/API, language, infrastructure, secrets, supply-chain, and memory-safety review policies.
 - [`assets/`](../skills/security-audit/assets/) — templates and worked examples for threat models and findings.
 - [`scripts/init_security.sh`](../skills/security-audit/scripts/init_security.sh) — helper to scaffold `.security/`.
+- [`scripts/update_cwe_reference.py`](../skills/security-audit/scripts/update_cwe_reference.py) — downloads MITRE CWE XML and regenerates the compact catalog.

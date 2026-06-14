@@ -1,0 +1,18 @@
+{
+  "catalog_date": "2026-04-30",
+  "catalog_name": "CWE",
+  "catalog_version": "4.20",
+  "category_count": 422,
+  "entry_count": 1391,
+  "files": {
+    "catalog_jsonl": "cwe-catalog.jsonl",
+    "index_markdown": "cwe-index.md",
+    "labels_json": "cwe-labels.json"
+  },
+  "generated_at_utc": "2026-06-14T08:08:18Z",
+  "schema_url": "https://cwe.mitre.org/data/xsd/cwe_schema_latest.xsd",
+  "source": "https://cwe.mitre.org/data/xml/cwec_latest.xml.zip#cwec_v4.20.xml",
+  "source_kind": "downloaded-zip",
+  "source_url": "https://cwe.mitre.org/data/xml/cwec_latest.xml.zip",
+  "weakness_count": 969
+}
