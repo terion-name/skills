@@ -352,16 +352,16 @@ Criticality: <critical|high|medium|low|informational> (attack path: <critical|hi
 Status: <validated|likely|unvalidated|false-positive>
 
 # Metadata
-Repo: <owner/name>
-Commit: <introducing short sha, or reviewed HEAD/diff sha when not known>
-Created: <date, time>
-Category: <auth|injection|ssrf|supply-chain|secrets|cve|container|iac|crypto|memory|functional-regression|other>
-CWE: <CWE-NNN - short label from references/cwe/cwe-labels.json>
-CWE description: <one-sentence description from references/cwe/cwe-catalog.jsonl>
-CWE mapping: <primary|approximate|advisory-provided>; <why this CWE matches the root weakness>
-Standards: <CWE-NNN, ASVS/OWASP/NIST/SLSA mappings when applicable>
-Detected by: <manual review|commit-review|semgrep|trivy|osv-scanner|gitleaks|codeql|other>
-Signals: Security, <Validated|Likely|Unvalidated>, <Patch generated>, <Attack-path>
+- Repo: <owner/name>
+- Commit: <introducing short sha, or reviewed HEAD/diff sha when not known>
+- Created: <date, time>
+- Category: <auth|injection|ssrf|supply-chain|secrets|cve|container|iac|crypto|memory|functional-regression|other>
+- CWE: <CWE-NNN - short label from references/cwe/cwe-labels.json>
+- CWE description: <one-sentence description from references/cwe/cwe-catalog.jsonl>
+- CWE mapping: <primary|approximate|advisory-provided>; <why this CWE matches the root weakness>
+- Standards: <CWE-NNN, ASVS/OWASP/NIST/SLSA mappings when applicable>
+- Detected by: <manual review|commit-review|semgrep|trivy|osv-scanner|gitleaks|codeql|other>
+- Signals: Security, <Validated|Likely|Unvalidated>, <Patch generated>, <Attack-path>
 
 ## Summary
 <One-paragraph explanation of the issue and why it matters.>

@@ -9,19 +9,19 @@ Status: validated
 Origin: introduced-by-diff
 
 # Metadata
-Repo: example-org/host-provisioner
-Commit: abc1234
-Author: maintainer@example.com
-Created: 2026-01-15, 10:52 AM
-Category: iac
-CWE: CWE-379 - Guessed or visible temporary file
-CWE description: The product creates a temporary file in a directory whose permissions allow unintended actors to determine the file's existence or otherwise access that file.
-CWE mapping: primary; the bundle path is predictable and staged under world-writable `/tmp`, allowing an unprivileged local actor to pre-create the file consumed by a privileged extraction step.
-Standards: CWE-379
-Detected by: manual review + semgrep
-Assignee: Unassigned
-Signals: Security, Validated, Patch generated, Attack-path
-Resolution: —
+- Repo: example-org/host-provisioner
+- Commit: abc1234
+- Author: maintainer@example.com
+- Created: 2026-01-15, 10:52 AM
+- Category: iac
+- CWE: CWE-379 - Guessed or visible temporary file
+- CWE description: The product creates a temporary file in a directory whose permissions allow unintended actors to determine the file's existence or otherwise access that file.
+- CWE mapping: primary; the bundle path is predictable and staged under world-writable `/tmp`, allowing an unprivileged local actor to pre-create the file consumed by a privileged extraction step.
+- Standards: CWE-379
+- Detected by: manual review + semgrep
+- Assignee: Unassigned
+- Signals: Security, Validated, Patch generated, Attack-path
+- Resolution: —
 
 # Summary
 A new Ansible role enables prebuilt plugin bundles by default, downloads the bundle to a predictable path

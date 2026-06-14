@@ -4,20 +4,20 @@ Status: <validated|likely|unvalidated|false-positive>
 Origin: <introduced-by-diff|pre-existing|uncertain>   # commit/diff mode only; omit for full audits
 
 # Metadata
-Repo: <owner/name>
-Commit: <introducing short sha, or reviewed HEAD/diff sha when not known. In commit-history mode this MUST be the introducing commit, not the review HEAD>
-Fixed in commit: <short sha if already fixed; omit if unresolved. Do not replace with nonstandard "Fixed:" metadata>
-Author: <if known>
-Created: <date, time>
-Category: <auth|injection|ssrf|supply-chain|secrets|cve|container|iac|crypto|memory|functional-regression|other>
-CWE: <CWE-NNN - short label from references/cwe/cwe-labels.json>
-CWE description: <one-sentence description from references/cwe/cwe-catalog.jsonl, trimmed for readability>
-CWE mapping: <primary|approximate|advisory-provided>; <one-sentence rationale that ties the weakness to this finding>
-Standards: <CWE-NNN, ASVS vX.Y.Z-..., OWASP APIx:YYYY, NIST SSDF PW/RV/..., SLSA/Scorecard where applicable>
-Detected by: <manual review|commit-review|semgrep|trivy|osv-scanner|gitleaks|codeql|other>
-Assignee: <Unassigned>
-Signals: Security, <Validated|Likely|Unvalidated>, <Patch generated>, <Attack-path>
-Resolution: <if applicable>
+- Repo: <owner/name>
+- Commit: <introducing short sha, or reviewed HEAD/diff sha when not known. In commit-history mode this MUST be the introducing commit, not the review HEAD>
+- Fixed in commit: <short sha if already fixed; omit if unresolved. Do not replace with nonstandard "Fixed:" metadata>
+- Author: <if known>
+- Created: <date, time>
+- Category: <auth|injection|ssrf|supply-chain|secrets|cve|container|iac|crypto|memory|functional-regression|other>
+- CWE: <CWE-NNN - short label from references/cwe/cwe-labels.json>
+- CWE description: <one-sentence description from references/cwe/cwe-catalog.jsonl, trimmed for readability>
+- CWE mapping: <primary|approximate|advisory-provided>; <one-sentence rationale that ties the weakness to this finding>
+- Standards: <CWE-NNN, ASVS vX.Y.Z-..., OWASP APIx:YYYY, NIST SSDF PW/RV/..., SLSA/Scorecard where applicable>
+- Detected by: <manual review|commit-review|semgrep|trivy|osv-scanner|gitleaks|codeql|other>
+- Assignee: <Unassigned>
+- Signals: Security, <Validated|Likely|Unvalidated>, <Patch generated>, <Attack-path>
+- Resolution: <if applicable>
 
 # Summary
 <Plain-language description of the bug, its root cause, and the fix direction, in a few sentences. A

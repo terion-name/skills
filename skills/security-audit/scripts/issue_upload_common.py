@@ -20,7 +20,7 @@ from typing import Any
 ID_RE = re.compile(r"SEC-(\d+)", re.IGNORECASE)
 COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 SECTION_RE = re.compile(r"^# ([^\n#].*)$", re.MULTILINE)
-METADATA_RE = re.compile(r"^([A-Za-z][A-Za-z0-9 _/-]*):\s*(.*)$")
+METADATA_RE = re.compile(r"^(?:[-*]\s+)?([A-Za-z][A-Za-z0-9 _/-]*):\s*(.*)$")
 
 
 @dataclass(frozen=True)

@@ -93,10 +93,10 @@ Mapping rules:
 Required metadata fields:
 
 ```
-CWE: CWE-22 - Path Traversal
-CWE description: <one-sentence catalog description, trimmed for readability>
-CWE mapping: primary; <why this CWE matches the source/sink or invariant break>
-Standards: CWE-22, <other applicable mappings>
+- CWE: CWE-22 - Path Traversal
+- CWE description: <one-sentence catalog description, trimmed for readability>
+- CWE mapping: primary; <why this CWE matches the source/sink or invariant break>
+- Standards: CWE-22, <other applicable mappings>
 ```
 
 If multiple CWEs materially apply, put the primary one in `CWE` and filename, then list additional CWE
@@ -170,7 +170,7 @@ One file per finding at
 - **Header:** `Title`, `Criticality: <level> (attack path: <level>)`, `Status: <validated|likely|
   unvalidated|false-positive>`. In commit/diff mode, also tag `Origin: <introduced-by-diff|pre-existing|
   uncertain>` so reviewers know whether the PR caused it.
-- **# Metadata:** repo, commit, fixed-in commit if applicable, author (if known), created date, category
+- **# Metadata:** a bullet list of repo, commit, fixed-in commit if applicable, author (if known), created date, category
   (`auth|injection|ssrf|supply-chain|secrets|cve|container|iac|crypto|memory|functional-regression|other`),
   primary CWE (`CWE: CWE-NNN - <short label>`), CWE description, CWE mapping rationale, standards mapping
   (`ASVS vX.Y.Z-...`, `OWASP APIx:YYYY`, `CWE-...`, `NIST SSDF ...`, `SLSA`/Scorecard where applicable),

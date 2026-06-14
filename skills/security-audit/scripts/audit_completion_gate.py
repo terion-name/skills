@@ -27,7 +27,7 @@ FINDING_FILENAME_RE = re.compile(
     r"\[(?P<tag>CWE-(?P<cwe_number>\d+)-[a-z0-9][a-z0-9-]*)\]-.+\.md$"
 )
 CRITICALITY_RE = re.compile(r"^Criticality:\s*([A-Za-z]+)", re.M)
-METADATA_RE = re.compile(r"^([A-Za-z][A-Za-z0-9 _/-]*):\s*(.*)$", re.M)
+METADATA_RE = re.compile(r"^(?:[-*]\s+)?([A-Za-z][A-Za-z0-9 _/-]*):\s*(.*)$", re.M)
 SECURITY_DIR_DEFAULT = ".security"
 VALID_REVIEW_STATUSES = {"skip", "reviewed-no-finding", "candidate"}
 REQUIRED_DELEGATION_BASE_PHASES = {"threat-model", "scan", "report-draft"}

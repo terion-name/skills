@@ -14,10 +14,10 @@ Generated for the security-audit skill. Use `cwe-catalog.jsonl` as the structure
 For every validated, likely, or unvalidated finding, choose the closest CWE weakness and include:
 
 ```
-CWE: CWE-22 - Path Traversal
-CWE description: Improper limitation of a pathname to a restricted directory allows traversal outside the intended root.
-CWE mapping: primary; the source accepts a user-controlled path and the sink resolves it without a containment check.
-Standards: CWE-22, <other mappings>
+- CWE: CWE-22 - Path Traversal
+- CWE description: Improper limitation of a pathname to a restricted directory allows traversal outside the intended root.
+- CWE mapping: primary; the source accepts a user-controlled path and the sink resolves it without a containment check.
+- Standards: CWE-22, <other mappings>
 ```
 
 Use `filename_tag` for report filenames, e.g. `SEC-001-[HIGH]-[CWE-22-path-traversal]-arbitrary-file-read.md`.
